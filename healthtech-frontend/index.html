@@ -23,6 +23,20 @@ body.intro-activa>*:not(#splash-screen){display:none!important}
 .progreso-card.inr-amarillo{border-left-color:#F2B705}
 .progreso-card.inr-rojo{border-left-color:var(--rojo-alerta)}
 .clima-actual{display:flex;align-items:center;gap:14px}.clima-icono-grande svg{width:48px;height:48px}.clima-temp-grande{font-size:28px;margin:0;color:var(--verde-oscuro);font-weight:500}.clima-sub{margin:2px 0 0;font-size:12px;color:var(--gris-texto)}.clima-pronostico{display:flex;gap:6px;margin-top:12px;overflow-x:auto}.clima-dia{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;color:var(--gris-texto);min-width:34px}.clima-dia svg{width:22px;height:22px}.clima-dia strong{font-size:11px;color:#16221e}
+/* --- Calendario en cuadrícula, semáforo de medicamentos y tarjetas --- */
+.calendario{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;justify-content:stretch}
+.calendario-semana{font-size:10px;color:#9baca3;font-weight:600;padding:2px 0}
+.calendario-hueco{display:block}
+.calendario-dia{display:grid;place-items:center;aspect-ratio:1/1;border-radius:10px;font-size:12px;color:#42524b;background:#f4f8f6}
+.calendario-hoy{background:var(--verde-menta);color:var(--verde-oscuro);font-weight:700;box-shadow:inset 0 0 0 2px var(--verde-primario)}
+.calendario-control{background:var(--verde-medio);color:#fff;font-weight:700}
+#detalleProximoControl{margin-top:6px}
+.punto-semaforo{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;vertical-align:middle;box-shadow:0 0 0 3px rgba(0,0,0,.05)}
+.punto-verde{background:#00CC9F}.punto-amarillo{background:#F2B705}.punto-rojo{background:#DC2626}
+.medicamento-item,.historial-item{padding:12px;border-radius:12px;background:var(--verde-menta)}
+.medicamento-item h3{font-size:14px;margin:0 0 6px}
+.medicamento-item p,.historial-item p{margin:3px 0;font-size:12px}
+.medicamento-item .btn-primary{padding:9px;font-size:12px}
 .cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}.cal-nav button{padding:4px 10px;flex:none;width:auto}
 .calendario-dia{min-width:0}
 </style>
