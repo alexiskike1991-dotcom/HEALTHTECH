@@ -15,7 +15,7 @@ const formLogin = $('formLogin');
 const formRegistro = $('formRegistro');
 const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
-// ---------------------------------------------------------------- Conexión con la API (Django)
+
 async function fetchAPI(path, options = {}, _reintentando) {
   const headers = Object.assign({}, options.headers || {});
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
@@ -407,6 +407,10 @@ function dibujarCalendario() {
     linea2.id = 'medicoTratante';
     linea2.textContent = `Médico tratante: ${medico}`;
     cuerpo.append(linea1, linea2);
+    const ult = localStorage.getItem('taco_ultimo_control');
+    if (ult) { const l3 = document.createElement('small'); l3.style.display = 'block'; l3.textContent = `Último control: ${formatearFechaISO(ult)}`; cuerpo.append(l3); }
+    const diag = leerDiagnosticosGuardados();
+    if (diag.length) { const l4 = document.createElement('small'); l4.style.display = 'block'; l4.textContent = `Diagnóstico: ${diag.join(', ')}`; cuerpo.append(l4); }
     fila.append(cuerpo);
     descripcion.append(fila);
   }
@@ -655,6 +659,29 @@ function seguroHTML(valor) {
   return String(valor).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
 
+
+function fechaControlISO(valor) {
+  if (!valor) return null;
+  const t = String(valor).trim();
+  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = t.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/);
+  if (m) { const y = m[3].length === 2 ? `20${m[3]}` : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+  return null;
+}
+function fechaControlValida(valor) {
+  const iso = fechaControlISO(valor);
+  return iso && iso >= fechaLocalISO(new Date()) ? iso : null;
+}
+function diagnosticosLista(datos) {
+  const d = datos && datos.diagnosticos;
+  if (Array.isArray(d)) return d.map(x => String(x).trim()).filter(Boolean);
+  if (typeof d === 'string' && d.trim()) return [d.trim()];
+  return [];
+}
+function leerDiagnosticosGuardados() {
+  try { const v = JSON.parse(localStorage.getItem('taco_diagnosticos') || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+}
 function mostrarPopupReceta(datosExtraidos) {
   return new Promise(resolve => {
     const overlay = crearPopupReceta();
@@ -667,7 +694,9 @@ function mostrarPopupReceta(datosExtraidos) {
       <p><strong>INR:</strong> ${seguroHTML(datosExtraidos.inr_actual ?? 'No legible')}</p>
       <p><strong>Rango terapéutico:</strong> ${seguroHTML(datosExtraidos.rango_terapeutico ?? '—')}</p>
       <p><strong>Médico:</strong> ${seguroHTML(datosExtraidos.medico ?? 'No indicado')}</p>
+      <p><strong>Último control:</strong> ${seguroHTML(datosExtraidos.fecha_ultimo_control ?? 'No indicado')}</p>
       <p><strong>Próximo control:</strong> ${seguroHTML(datosExtraidos.fecha_control ?? 'No indicado')}</p>
+      <p><strong>Diagnóstico(s):</strong> ${seguroHTML(diagnosticosLista(datosExtraidos).join(', ') || 'No indicado')}</p>
       ${medicamentos.map((med, i) => `
         <div style="border-top:1px solid #eee;margin-top:10px;padding-top:10px">
           <p><strong>Medicamento ${medicamentos.length > 1 ? i + 1 : ''}:</strong> ${seguroHTML(med.nombre ?? 'No indicado')}</p>
@@ -691,10 +720,10 @@ function mostrarPopupReceta(datosExtraidos) {
         unidadPastilla: $(`recetaUnidad-${i}`)?.value.trim() || 'No indicada',
         horaProgramada: $(`recetaHora-${i}`)?.value || '08:00',
         horarioSemanal: DIAS_SEMANA.reduce((acc, dia) => { acc[dia] = (med.dosis_diaria?.[dia]) || ''; return acc; }, {}),
-        proximoControl: datosExtraidos.fecha_control || null
+        proximoControl: fechaControlValida(datosExtraidos.fecha_control)
       }));
       limpiar();
-      resolve({ inr, min, max, medico: datosExtraidos.medico || null, medicamentos: medicamentosConfirmados });
+      resolve({ inr, min, max, medico: datosExtraidos.medico || null, ultimoControl: fechaControlISO(datosExtraidos.fecha_ultimo_control), diagnosticos: diagnosticosLista(datosExtraidos), medicamentos: medicamentosConfirmados });
     };
   });
 }
@@ -725,6 +754,8 @@ $('formReceta')?.addEventListener('submit', async e => {
     if (mensaje) mensaje.textContent = 'Guardando...';
 
     if (confirmado.medico) localStorage.setItem('taco_medico', confirmado.medico);
+    if (confirmado.ultimoControl) localStorage.setItem('taco_ultimo_control', confirmado.ultimoControl);
+    if (confirmado.diagnosticos && confirmado.diagnosticos.length) localStorage.setItem('taco_diagnosticos', JSON.stringify(confirmado.diagnosticos));
 
     let registroGuardado = null;
     if (confirmado.inr !== null && confirmado.min !== null && confirmado.max !== null) {
@@ -1044,7 +1075,7 @@ function reproducirIntro(alTerminar) {
     tarjeta.classList.toggle('is-flipped', registro);
     caraLogin.setAttribute('aria-hidden', String(registro));
     caraRegistro.setAttribute('aria-hidden', String(!registro));
-    caraLogin.inert = registro;                        
+    caraLogin.inert = registro;                         
     caraRegistro.inert = !registro;
     ['mensajeAuth', 'mensajeRegistro'].forEach(id => { if ($(id)) $(id).textContent = ''; });
     clearTimeout(temporizador);
