@@ -1,5 +1,4 @@
-// HealthTech TACO — conectado al backend de Django/DRF (Natt39/HEALTHTECH)
-// API_BASE_URL ya viene declarada en config.js (no la repetimos aquí para no romper la página)
+
 const API = `${String(API_BASE_URL).trim().replace(/\/+$/, '')}/api/v1`;
 const $ = id => document.getElementById(id);
 let accessToken = localStorage.getItem('taco_access') || null;
@@ -16,7 +15,7 @@ const formLogin = $('formLogin');
 const formRegistro = $('formRegistro');
 const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
-// ---------------------------------------------------------------- Conexión con la API (Django)
+
 async function fetchAPI(path, options = {}, _reintentando) {
   const headers = Object.assign({}, options.headers || {});
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
@@ -567,7 +566,7 @@ formLogin?.addEventListener('submit', async e => {
     localStorage.setItem('taco_refresh', refreshToken || '');
     localStorage.setItem('taco_id', String(idUsuario));
     localStorage.setItem('taco_nombre', info.usuario.nombre ?? 'Paciente');
-    mostrarPanel();
+    reproducirIntro(function () { mostrarPanel(); });
   } catch (error) {
     console.error('Error al iniciar sesión:', error);
     if (mensaje) mensaje.textContent = error.message || 'No se puede conectar con el servidor. Revisa que esté encendido.';
@@ -603,7 +602,7 @@ $('btnSalir')?.addEventListener('click', async () => {
   contadorMedicamentos(); nombreEnPantalla('Paciente'); pintarReporte([]); mostrarAuth();
 });
 
-// ---------------------------------------------------------------- Escáner de recetas (IA de Gemini vía Django)
+
 function crearPopupReceta() {
   if ($('popupReceta')) return $('popupReceta');
   const overlay = document.createElement('div');
@@ -985,3 +984,84 @@ $('inputFotoConfirmacion')?.addEventListener('change', async e => {
     if ($('mensajeAlerta')) $('mensajeAlerta').textContent = error.message || 'No se pudo conectar con el servidor.';
   }
 });
+function reproducirIntro(alTerminar) {
+  const splash = document.getElementById('splash-screen');
+  const video = document.getElementById('intro-video');
+  if (!splash || !video) { if (alTerminar) alTerminar(); return; }
+
+  let terminado = false;
+  let respaldo = null;
+  const terminar = function () {
+    if (terminado) return;         
+    terminado = true;
+    clearTimeout(respaldo);
+    video.removeEventListener('ended', terminar);
+    video.pause();
+      document.body.classList.remove('intro-activa');
+    splash.classList.add('hidden');
+    if (alTerminar) alTerminar();   
+  };
+
+  video.addEventListener('ended', terminar);   
+    document.body.classList.add('intro-activa');
+  splash.classList.remove('hidden');
+  video.currentTime = 0;
+  video.muted = true;
+  video.play().catch(function (e) {
+    console.warn('No se pudo reproducir la intro:', e);
+    terminar();                    
+  });
+
+ 
+  const duracion = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 8;
+  respaldo = setTimeout(terminar, (duracion + 3) * 1000);
+}
+
+(function () {
+  const tarjeta = $('flipCard');
+  const caraLogin = $('caraLogin');
+  const caraRegistro = $('caraRegistro');
+  let temporizador = null;
+
+  function mostrarCara(registro) {
+    if (!tarjeta || !caraLogin || !caraRegistro) return;
+    tarjeta.classList.add('is-animating');             
+    tarjeta.classList.toggle('is-flipped', registro);
+    caraLogin.setAttribute('aria-hidden', String(registro));
+    caraRegistro.setAttribute('aria-hidden', String(!registro));
+    caraLogin.inert = registro;                         
+    caraRegistro.inert = !registro;
+    ['mensajeAuth', 'mensajeRegistro'].forEach(id => { if ($(id)) $(id).textContent = ''; });
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => {
+      tarjeta.classList.remove('is-animating');
+      const primero = $(registro ? 'regNombre' : 'loginEmail');
+      if (primero) primero.focus({ preventScroll: true });
+    }, 850);
+  }
+
+  $('tabRegistro')?.addEventListener('click', () => mostrarCara(true));
+  $('tabLogin')?.addEventListener('click', () => mostrarCara(false));
+
+  // Ojo: mostrar / ocultar contraseña
+  document.querySelectorAll('.toggle-eye').forEach(boton => {
+    boton.addEventListener('click', () => {
+      const campo = $(boton.dataset.target);
+      if (!campo) return;
+      const mostrar = campo.type === 'password';
+      campo.type = mostrar ? 'text' : 'password';
+      boton.setAttribute('aria-label', mostrar ? 'Ocultar contraseña' : 'Mostrar contraseña');
+    });
+  });
+
+  $('linkOlvideContrasena')?.addEventListener('click', e => {
+    e.preventDefault();
+    if ($('mensajeAuth')) $('mensajeAuth').textContent = 'La recuperación de contraseña aún no está disponible. Contacta al administrador.';
+  });
+  document.querySelectorAll('.btn-social').forEach(boton => {
+    boton.addEventListener('click', () => {
+      const id = boton.closest('#caraRegistro') ? 'mensajeRegistro' : 'mensajeAuth';
+      if ($(id)) $(id).textContent = 'El acceso con Google o Apple estará disponible próximamente.';
+    });
+  });
+})();
