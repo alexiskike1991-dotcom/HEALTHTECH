@@ -15,7 +15,7 @@ const formLogin = $('formLogin');
 const formRegistro = $('formRegistro');
 const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
-
+// ---------------------------------------------------------------- Conexión con la API (Django)
 async function fetchAPI(path, options = {}, _reintentando) {
   const headers = Object.assign({}, options.headers || {});
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
@@ -191,8 +191,8 @@ function pintarReporte(registros) {
   const valor = ultimo ? numeroSeguro(ultimo.valorINR) : null;
   if ($('ultimoINRPanel')) $('ultimoINRPanel').textContent = valor === null ? '—' : String(ultimo.valorINR);
   if ($('ultimoRangoPanel')) $('ultimoRangoPanel').textContent = ultimo ? `${ultimo.rangoTerapeuticoMin ?? '—'} - ${ultimo.rangoTerapeuticoMax ?? '—'}` : '—';
-  if ($('medicoTratante')) $('medicoTratante').textContent = localStorage.getItem('taco_medico') || 'No registrado';
-  if ($('proximaConsultaTexto')) $('proximaConsultaTexto').textContent = fechaLegible(proximoControlGeneral());
+  if ($('medicoTratante')) $('medicoTratante').textContent = `Médico tratante: ${localStorage.getItem('taco_medico') || 'No registrado'}`;
+  dibujarCalendario();
 
   if ($('indicadorINRValor')) $('indicadorINRValor').textContent = valor === null ? '—' : String(ultimo.valorINR);
   if ($('indicadorProximoValor')) $('indicadorProximoValor').textContent = textoDiasRestantes(proximoControlGeneral());
@@ -268,7 +268,7 @@ function pintarReporte(registros) {
   if ($('graficoINRArea')) $('graficoINRArea').setAttribute('d', area);
   if ($('graficoINRLinea')) {
     $('graficoINRLinea').setAttribute('points', coordenadas);
-    $('graficoINRLinea').setAttribute('stroke', hayAlgunaCritica ? '#dc2626' : '#16a34a');
+    $('graficoINRLinea').setAttribute('stroke', COLOR_ESTADO[clasificarLectura(lecturas[lecturas.length - 1])] || '#16a34a');
   }
   const grupo = $('graficoINRPuntos');
   if (grupo) {
@@ -278,7 +278,7 @@ function pintarReporte(registros) {
       const circulo = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       circulo.setAttribute('cx', p.x.toFixed(1)); circulo.setAttribute('cy', p.y.toFixed(1));
       circulo.setAttribute('r', '5'); circulo.setAttribute('class', 'inr-punto');
-      circulo.setAttribute('fill', esCritico ? '#dc2626' : '#16a34a');
+      circulo.setAttribute('fill', COLOR_ESTADO[clasificarLectura(lecturas[i])] || '#16a34a');
       const titulo = document.createElementNS('http://www.w3.org/2000/svg', 'title');
       titulo.textContent = `${fechaLegible(lecturas[i].fechaLectura)}: INR ${lecturas[i].valorINR}${esCritico ? ' (fuera de rango)' : ''}`;
       circulo.append(titulo); grupo.append(circulo);
@@ -289,6 +289,7 @@ function pintarReporte(registros) {
     lecturas.forEach(r => { const span = document.createElement('span'); span.textContent = fechaLegible(r.fechaLectura); fechas.append(span); });
   }
 }
+const COLOR_ESTADO = { verde: '#16a34a', amarillo: '#f59e0b', rojo: '#dc2626' };
 function clasificarLectura(r) {
   const valor = numeroSeguro(r.valorINR);
   const min = numeroSeguro(r.rangoTerapeuticoMin);
@@ -391,9 +392,23 @@ function dibujarCalendario() {
   if (descripcion) {
     const proximos = [...controles.keys()].filter(fecha => fecha >= fechaHoy).sort();
     const siguiente = proximos[0];
-    descripcion.textContent = siguiente
-      ? `Próximo control guardado: ${formatearFechaISO(siguiente)} (${controles.get(siguiente).join(', ')}).`
+    const textoControl = siguiente
+      ? `Próximo control: ${formatearFechaISO(siguiente)} (${controles.get(siguiente).join(', ')})`
       : 'No hay fechas de próximo control guardadas. Agrégalas al registrar un medicamento.';
+    const medico = localStorage.getItem('taco_medico') || 'No registrado';
+    descripcion.replaceChildren();
+    const fila = document.createElement('div');
+    fila.className = 'cita-fila';
+    const cuerpo = document.createElement('div');
+    const linea1 = document.createElement('strong');
+    linea1.id = 'proximaConsultaTexto';
+    linea1.textContent = textoControl;
+    const linea2 = document.createElement('small');
+    linea2.id = 'medicoTratante';
+    linea2.textContent = `Médico tratante: ${medico}`;
+    cuerpo.append(linea1, linea2);
+    fila.append(cuerpo);
+    descripcion.append(fila);
   }
 }
 $('mesAnterior')?.addEventListener('click', () => {
@@ -789,7 +804,7 @@ async function cargarMedicamentos() {
     dibujarCalendario();
     if ($('indicadorAdherenciaValor')) $('indicadorAdherenciaValor').textContent = calcularAdherenciaGeneral();
     if ($('indicadorProximoValor')) $('indicadorProximoValor').textContent = textoDiasRestantes(proximoControlGeneral());
-    if ($('proximaConsultaTexto')) $('proximaConsultaTexto').textContent = fechaLegible(proximoControlGeneral());
+    dibujarCalendario();
     if (!listaMedicamentosActual.length) { lista.innerHTML = '<li>No tienes medicamentos registrados.</li>'; return; }
     lista.innerHTML = listaMedicamentosActual.map(m => {
       const colorSemaforo = colorAdherenciaMed(m);
@@ -1029,7 +1044,7 @@ function reproducirIntro(alTerminar) {
     tarjeta.classList.toggle('is-flipped', registro);
     caraLogin.setAttribute('aria-hidden', String(registro));
     caraRegistro.setAttribute('aria-hidden', String(!registro));
-    caraLogin.inert = registro;                         
+    caraLogin.inert = registro;                        
     caraRegistro.inert = !registro;
     ['mensajeAuth', 'mensajeRegistro'].forEach(id => { if ($(id)) $(id).textContent = ''; });
     clearTimeout(temporizador);
