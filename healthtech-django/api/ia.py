@@ -16,6 +16,10 @@ ESQUEMA_RECETA = {
     'properties': {
         'inr_actual': {'type': ['string', 'null']},
         'rango_terapeutico': {'type': ['string', 'null']},
+        'medico': {'type': ['string', 'null']},
+        'fecha_control': {'type': ['string', 'null']},
+        'fecha_ultimo_control': {'type': ['string', 'null']},
+        'diagnosticos': {'type': 'array', 'items': {'type': 'string'}},
         'medicamentos': {
             'type': 'array',
             'items': {
@@ -32,12 +36,18 @@ ESQUEMA_RECETA = {
             },
         },
     },
-    'required': ['inr_actual', 'rango_terapeutico', 'medicamentos'],
+    'required': ['inr_actual', 'rango_terapeutico', 'medico', 'fecha_control',
+                 'fecha_ultimo_control', 'diagnosticos', 'medicamentos'],
 }
 
 INSTRUCCIONES_RECETA = '''
 Lee solamente lo que se distingue en esta hoja de dosificación TACO.
 Extrae literalmente el INR y el rango terapéutico; si no son legibles escribe null.
+Extrae el nombre completo del médico o profesional que valida, firma o atiende la hoja (campo medico); si no aparece, null.
+Extrae la fecha del PRÓXIMO control (fecha_control) y la fecha del ÚLTIMO control (fecha_ultimo_control),
+ambas en formato YYYY-MM-DD (día/mes/año chileno: 05/11/2026 es 2026-11-05); si no se distingue con claridad, null.
+Extrae TODOS los diagnósticos que aparezcan escritos en la hoja, uno por elemento de la lista diagnosticos,
+tal como están escritos; si no hay ninguno, lista vacía.
 Extrae nombre del medicamento y gramaje solo si aparecen claramente.
 Copia la dosis EXACTAMENTE como aparece para lunes a domingo,
 incluyendo fracciones como 1+1/4 o 1+1/2. Si alguna dosis no se distingue, escribe null.
@@ -59,7 +69,7 @@ def analizar_hoja_con_gemini(imagen_jpeg: bytes) -> dict:
     if not settings.GEMINI_API_KEY:
         raise IAConfigError('Falta configurar GEMINI_API_KEY en el servidor.')
     try:
-        from google import genai  # import diferido: no es necesario para el resto de la API
+        from google import genai  
         cliente = genai.Client(api_key=settings.GEMINI_API_KEY)
         interaccion = cliente.interactions.create(
             model=settings.GEMINI_MODEL,
