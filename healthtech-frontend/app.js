@@ -992,7 +992,7 @@ function reproducirIntro(alTerminar) {
   let terminado = false;
   let respaldo = null;
   const terminar = function () {
-    if (terminado) return;         
+    if (terminado) return;          
     terminado = true;
     clearTimeout(respaldo);
     video.removeEventListener('ended', terminar);
@@ -1009,10 +1009,10 @@ function reproducirIntro(alTerminar) {
   video.muted = true;
   video.play().catch(function (e) {
     console.warn('No se pudo reproducir la intro:', e);
-    terminar();                    
+    terminar();                     
   });
 
- 
+  
   const duracion = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 8;
   respaldo = setTimeout(terminar, (duracion + 3) * 1000);
 }
@@ -1043,7 +1043,7 @@ function reproducirIntro(alTerminar) {
   $('tabRegistro')?.addEventListener('click', () => mostrarCara(true));
   $('tabLogin')?.addEventListener('click', () => mostrarCara(false));
 
-  // Ojo: mostrar / ocultar contraseña
+  
   document.querySelectorAll('.toggle-eye').forEach(boton => {
     boton.addEventListener('click', () => {
       const campo = $(boton.dataset.target);
@@ -1054,6 +1054,7 @@ function reproducirIntro(alTerminar) {
     });
   });
 
+  
   $('linkOlvideContrasena')?.addEventListener('click', e => {
     e.preventDefault();
     if ($('mensajeAuth')) $('mensajeAuth').textContent = 'La recuperación de contraseña aún no está disponible. Contacta al administrador.';
