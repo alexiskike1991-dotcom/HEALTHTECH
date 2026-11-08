@@ -5,6 +5,7 @@ let accessToken = localStorage.getItem('taco_access') || null;
 let refreshToken = localStorage.getItem('taco_refresh') || null;
 let idUsuario = localStorage.getItem('taco_id') || null;
 let listaMedicamentosActual = [];
+const COLOR_ESTADO = { verde: '#16a34a', amarillo: '#f59e0b', rojo: '#dc2626' };
 let medicamentoEnAlerta = null;
 let intervaloAlertas = null;
 let sesion = 0;
@@ -86,10 +87,57 @@ function nombreEnPantalla(nombre) {
   if ($('nombreUsuarioPanel')) $('nombreUsuarioPanel').textContent = texto;
   if ($('nombrePacienteInicio')) $('nombrePacienteInicio').textContent = texto;
 }
+
+function dosisANumero(txt) {
+  if (txt === null || txt === undefined) return 0;
+  const t = String(txt).trim().replace(',', '.');
+  if (!t) return 0;
+  return t.split('+').reduce((suma, parte) => {
+    const f = parte.trim().match(/^(\d+)\/(\d+)$/);
+    const n = f ? Number(f[1]) / Number(f[2]) : Number(parte);
+    return suma + (Number.isFinite(n) ? n : 0);
+  }, 0);
+}
+function pintarBarrasPlan() {
+  const cont = $('planBarras'); if (!cont) return;
+  const etiquetas = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+  const totales = DIAS_SEMANA.map(dia => listaMedicamentosActual.reduce((s, m) => s + dosisANumero(m.horarioSemanal && m.horarioSemanal[dia]), 0));
+  const max = Math.max(...totales, 0);
+  const hoy = (new Date().getDay() + 6) % 7;
+  cont.replaceChildren();
+  if (!max) { cont.style.height = 'auto'; cont.textContent = 'Sin dosis registradas.'; if ($('planResumen')) $('planResumen').textContent = ''; return; }
+  cont.style.height = '96px';
+  totales.forEach((t, i) => {
+    const b = document.createElement('div'); b.className = 'barra' + (i === hoy ? ' hoy' : '');
+    const v = document.createElement('b'); v.textContent = String(Math.round(t * 100) / 100);
+    const barra = document.createElement('i'); barra.style.height = `${Math.max(6, t / max * 60)}px`;
+    const e = document.createElement('span'); e.textContent = etiquetas[i];
+    b.append(v, barra, e); cont.append(b);
+  });
+  const semanal = totales.reduce((s, t) => s + t, 0);
+  if ($('planResumen')) $('planResumen').textContent = `Comprimidos por día (hoy resaltado). Total semanal: ${Math.round(semanal * 100) / 100}.`;
+}
+function pintarBarrasINR(registros) {
+  const cont = $('barrasINR'); if (!cont) return;
+  const lecturas = registros.filter(r => numeroSeguro(r.valorINR) !== null).slice(0, 7).reverse();
+  cont.replaceChildren();
+  if (!lecturas.length) { cont.style.height = 'auto'; cont.textContent = 'Aún no hay lecturas de INR.'; return; }
+  cont.style.height = '96px';
+  const max = Math.max(...lecturas.map(r => numeroSeguro(r.valorINR)), 0.1);
+  lecturas.forEach(r => {
+    const v = numeroSeguro(r.valorINR);
+    const b = document.createElement('div'); b.className = 'barra';
+    const t = document.createElement('b'); t.textContent = String(v); t.style.color = COLOR_ESTADO[clasificarLectura(r)] || '#16a34a';
+    const barra = document.createElement('i'); barra.style.height = `${Math.max(6, v / max * 60)}px`; barra.style.background = COLOR_ESTADO[clasificarLectura(r)] || '#16a34a';
+    const e = document.createElement('span'); e.textContent = fechaLegible(r.fechaLectura).slice(0, 5);
+    b.append(t, barra, e); cont.append(b);
+  });
+}
 function contadorMedicamentos() {
   const cantidad = listaMedicamentosActual.length;
   if ($('totalMedicamentos')) $('totalMedicamentos').textContent = String(cantidad);
   if ($('totalMedicamentosResumen')) $('totalMedicamentosResumen').textContent = String(cantidad);
+  pintarBarrasPlan();
 }
 function reiniciarResumen() {
   listaMedicamentosActual = [];
@@ -187,6 +235,7 @@ function diasSemanaResumen(horarioSemanal) {
   return dias.map(([clave, etiqueta]) => `${etiqueta}: ${horarioSemanal[clave] || '—'}`).join(' · ');
 }
 function pintarReporte(registros) {
+  pintarBarrasINR(registros);
   const ultimo = registros[0];
   const valor = ultimo ? numeroSeguro(ultimo.valorINR) : null;
   if ($('ultimoINRPanel')) $('ultimoINRPanel').textContent = valor === null ? '—' : String(ultimo.valorINR);
@@ -289,7 +338,6 @@ function pintarReporte(registros) {
     lecturas.forEach(r => { const span = document.createElement('span'); span.textContent = fechaLegible(r.fechaLectura); fechas.append(span); });
   }
 }
-const COLOR_ESTADO = { verde: '#16a34a', amarillo: '#f59e0b', rojo: '#dc2626' };
 function clasificarLectura(r) {
   const valor = numeroSeguro(r.valorINR);
   const min = numeroSeguro(r.rangoTerapeuticoMin);
@@ -1038,7 +1086,7 @@ function reproducirIntro(alTerminar) {
   let terminado = false;
   let respaldo = null;
   const terminar = function () {
-    if (terminado) return;          
+    if (terminado) return;         
     terminado = true;
     clearTimeout(respaldo);
     video.removeEventListener('ended', terminar);
