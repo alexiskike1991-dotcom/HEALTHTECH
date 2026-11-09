@@ -1,5 +1,4 @@
-// HealthTech TACO — conectado al backend de Django/DRF (Natt39/HEALTHTECH)
-// API_BASE_URL ya viene declarada en config.js (no la repetimos aquí para no romper la página)
+
 const API = `${String(API_BASE_URL).trim().replace(/\/+$/, '')}/api/v1`;
 const $ = id => document.getElementById(id);
 let accessToken = localStorage.getItem('taco_access') || null;
@@ -18,7 +17,7 @@ const formLogin = $('formLogin');
 const formRegistro = $('formRegistro');
 const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
-// ---------------------------------------------------------------- Conexión con la API (Django)
+
 async function fetchAPI(path, options = {}, _reintentando) {
   const headers = Object.assign({}, options.headers || {});
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
@@ -136,7 +135,7 @@ function pintarBarrasINR(registros) {
   });
 }
 
-// ---------------------------------------------------------------- Ficha médica, "Hoy" y accesibilidad
+
 function limpiarMedico(texto) {
   if (!texto) return '';
   let t = String(texto).replace(/\b\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]\b/g, '').replace(/\s{2,}/g, ' ').replace(/\s+,/g, ',').trim().replace(/^,|,$/g, '').trim();
@@ -328,7 +327,22 @@ function pintarReporte(registros) {
   const ultimo = registros[0];
   const valor = ultimo ? numeroSeguro(ultimo.valorINR) : null;
   if ($('ultimoINRPanel')) $('ultimoINRPanel').textContent = valor === null ? '—' : String(ultimo.valorINR);
-  if ($('ultimoRangoPanel')) $('ultimoRangoPanel').textContent = ultimo ? `${ultimo.rangoTerapeuticoMin ?? '—'} - ${ultimo.rangoTerapeuticoMax ?? '—'}` : '—';
+  if ($('ultimoRangoPanel')) $('ultimoRangoPanel').textContent = ultimo ? `${ultimo.rangoTerapeuticoMin ?? '—'} a ${ultimo.rangoTerapeuticoMax ?? '—'}` : '—';
+  if ($('estadoRangoPanel')) {
+    const el = $('estadoRangoPanel');
+    let txt = 'SIN DATOS', col = '#94a3b8';
+    if (ultimo && valor !== null) {
+      const mn0 = numeroSeguro(ultimo.rangoTerapeuticoMin), mx0 = numeroSeguro(ultimo.rangoTerapeuticoMax);
+      if (mn0 !== null && valor < mn0) { txt = 'BAJO'; col = COLOR_ESTADO[clasificarLectura(ultimo)] || '#f59e0b'; }
+      else if (mx0 !== null && valor > mx0) { txt = 'ALTO'; col = COLOR_ESTADO[clasificarLectura(ultimo)] || '#dc2626'; }
+      else { txt = 'EN RANGO'; col = COLOR_ESTADO.verde || '#16a34a'; }
+    }
+    el.textContent = txt; el.style.background = col;
+  }
+  if ($('cuentaRangoPanel')) {
+    const dentro = registros.filter(r => { const v = numeroSeguro(r.valorINR), a = numeroSeguro(r.rangoTerapeuticoMin), b = numeroSeguro(r.rangoTerapeuticoMax); return v !== null && (a === null || v >= a) && (b === null || v <= b); }).length;
+    $('cuentaRangoPanel').textContent = registros.length ? `${dentro} de ${registros.length} lecturas dentro del rango` : '';
+  }
   if ($('medicoTratante')) $('medicoTratante').textContent = `Médico tratante: ${localStorage.getItem('taco_medico') || 'No registrado'}`;
   dibujarCalendario();
 
@@ -767,7 +781,7 @@ $('btnSalir')?.addEventListener('click', async () => {
   contadorMedicamentos(); nombreEnPantalla('Paciente'); pintarReporte([]); mostrarAuth();
 });
 
-// ---------------------------------------------------------------- Escáner de recetas (IA de Gemini vía Django)
+
 function crearPopupReceta() {
   if ($('popupReceta')) return $('popupReceta');
   const overlay = document.createElement('div');
@@ -1236,34 +1250,31 @@ function reproducirIntro(alTerminar) {
   let terminado = false;
   let respaldo = null;
   const terminar = function () {
-    if (terminado) return;          // evita ejecutarse dos veces
+    if (terminado) return;          
     terminado = true;
     clearTimeout(respaldo);
     video.removeEventListener('ended', terminar);
     video.pause();
       document.body.classList.remove('intro-activa');
     splash.classList.add('hidden');
-    if (alTerminar) alTerminar();   // recién aquí se muestra el panel del paciente
+    if (alTerminar) alTerminar();   
   };
 
-  video.addEventListener('ended', terminar);   // se cierra cuando el video TERMINA, no por tiempo fijo
+  video.addEventListener('ended', terminar);   
     document.body.classList.add('intro-activa');
   splash.classList.remove('hidden');
   video.currentTime = 0;
   video.muted = true;
   video.play().catch(function (e) {
     console.warn('No se pudo reproducir la intro:', e);
-    terminar();                     // si el navegador la bloquea, no dejamos al usuario atrapado
+    terminar();                     
   });
 
-  // Respaldo de seguridad: duración real del video + 3 segundos
+  
   const duracion = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 8;
   respaldo = setTimeout(terminar, (duracion + 3) * 1000);
 }
-// ---------------------------------------------------------------------------
-// Pantalla de acceso: cambio entre "Iniciar sesión" y "Crear cuenta" (tarjeta que gira),
-// ojo de la contraseña y botones secundarios. Sin esto, "Crear cuenta" no hace nada.
-// ---------------------------------------------------------------------------
+
 (function () {
   const tarjeta = $('flipCard');
   const caraLogin = $('caraLogin');
@@ -1272,11 +1283,11 @@ function reproducirIntro(alTerminar) {
 
   function mostrarCara(registro) {
     if (!tarjeta || !caraLogin || !caraRegistro) return;
-    tarjeta.classList.add('is-animating');             // mantiene visibles ambas caras durante el giro
+    tarjeta.classList.add('is-animating');             
     tarjeta.classList.toggle('is-flipped', registro);
     caraLogin.setAttribute('aria-hidden', String(registro));
     caraRegistro.setAttribute('aria-hidden', String(!registro));
-    caraLogin.inert = registro;                         // la cara oculta no recibe foco ni clics
+    caraLogin.inert = registro;                         
     caraRegistro.inert = !registro;
     ['mensajeAuth', 'mensajeRegistro'].forEach(id => { if ($(id)) $(id).textContent = ''; });
     clearTimeout(temporizador);
@@ -1290,7 +1301,7 @@ function reproducirIntro(alTerminar) {
   $('tabRegistro')?.addEventListener('click', () => mostrarCara(true));
   $('tabLogin')?.addEventListener('click', () => mostrarCara(false));
 
-  // Ojo: mostrar / ocultar contraseña
+  
   document.querySelectorAll('.toggle-eye').forEach(boton => {
     boton.addEventListener('click', () => {
       const campo = $(boton.dataset.target);
@@ -1301,7 +1312,7 @@ function reproducirIntro(alTerminar) {
     });
   });
 
-  // Funciones que el backend aún no ofrece: se avisa en lugar de dejar el botón "muerto"
+  
   $('linkOlvideContrasena')?.addEventListener('click', e => {
     e.preventDefault();
     if ($('mensajeAuth')) $('mensajeAuth').textContent = 'La recuperación de contraseña aún no está disponible. Contacta al administrador.';
