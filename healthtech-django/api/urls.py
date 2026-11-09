@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
-from . import views
+from . import cuidador, views
 
 router = SimpleRouter()
 router.register('medicamentos', views.MedicamentoViewSet, basename='medicamento')
@@ -16,5 +16,8 @@ urlpatterns = [
     path('auth/refresh/', views.RefrescarTokenView.as_view(), name='auth-refresh'),
     path('auth/logout/', views.LogoutView.as_view(), name='auth-logout'),
     path('auth/perfil/', views.PerfilView.as_view(), name='auth-perfil'),
+    path('cuidador/enlace/', cuidador.EnlaceCuidadorView.as_view(), name='cuidador-enlace'),
+    path('cuidador/ficha/', cuidador.FichaCuidadorView.as_view(), name='cuidador-ficha'),
+    path('cuidador/ver/<str:token>/', cuidador.VerCuidadorView.as_view(), name='cuidador-ver'),
     path('recetas/analizar/', views.AnalizarRecetaView.as_view(), name='recetas-analizar'),
 ] + router.urls
