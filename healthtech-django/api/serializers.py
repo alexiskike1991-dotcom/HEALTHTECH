@@ -14,12 +14,12 @@ from .ia import DIAS
 from .models import Medicamento, RegistroINR, RegistroToma
 from .permissions import es_admin, rol_de
 
-# Rango plausible de un INR; fuera de él casi seguro es un error de digitación/lectura.
+
 INR_MIN, INR_MAX = 0.5, 10.0
 
-# Dosis válidas: 1 | 1,5 | 1/2 | 1+1/4  (vacío = sin dosis ese día)
+
 DOSIS_RE = re.compile(r'^(?:\d{1,2}(?:[.,]\d{1,2})?|[1-9]\d?/[1-9]\d?|\d{1,2}\+[1-9]\d?/[1-9]\d?)$')
-# Sanitización de texto libre: sin etiquetas HTML ni caracteres de control.
+
 PROHIBIDOS_RE = re.compile(r'[<>\x00-\x08\x0b\x0c\x0e-\x1f]')
 
 
@@ -40,7 +40,7 @@ def validar_dosis(valor):
     return texto
 
 
-# ---------------------------------------------------------------- Usuarios / auth
+
 class UsuarioSerializer(serializers.ModelSerializer):
     nombre = serializers.CharField(source='first_name', read_only=True)
     rol = serializers.SerializerMethodField()
@@ -84,7 +84,7 @@ class RegistroUsuarioSerializer(serializers.Serializer):
                 username=validated_data['email'], email=validated_data['email'],
                 password=validated_data['password'], first_name=validated_data['nombre'],
             )
-        except IntegrityError:  # carrera entre dos registros simultáneos
+        except IntegrityError:  
             raise serializers.ValidationError({'email': ['Este correo ya está registrado.']})
 
 
@@ -96,13 +96,13 @@ class LoginSerializer(serializers.Serializer):
         user = authenticate(request=self.context.get('request'),
                             username=attrs['email'].strip().lower(), password=attrs['password'])
         if user is None or not user.is_active:
-            # Mismo mensaje para "no existe" y "clave incorrecta": evita enumerar usuarios.
+            
             raise CredencialesIncorrectas()
         attrs['user'] = user
         return attrs
 
 
-# ---------------------------------------------------------------- Medicamentos
+
 class MedicamentoSerializer(serializers.ModelSerializer):
     nombre = serializers.CharField(min_length=2, max_length=100)
     unidadPastilla = serializers.CharField(max_length=100)
@@ -111,7 +111,7 @@ class MedicamentoSerializer(serializers.ModelSerializer):
         model = Medicamento
         fields = ('id', 'usuario', 'nombre', 'unidadPastilla', 'horaProgramada', 'horarioSemanal',
                   'periodicidad', 'proximoControl', 'confirmadaHoy', 'fechaUltimaConfirmacion')
-        # El dueño y la confirmación diaria NO se aceptan desde el cliente (mass assignment).
+        
         read_only_fields = ('id', 'usuario', 'confirmadaHoy', 'fechaUltimaConfirmacion')
 
     def validate_nombre(self, value):
@@ -149,18 +149,19 @@ class MedicamentoSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         datos = super().to_representation(instance)
-        # "Confirmada hoy" solo es verdad si la última confirmación fue hoy.
+        
         datos['confirmadaHoy'] = instance.fechaUltimaConfirmacion == timezone.localdate()
         return datos
 
 
-# ---------------------------------------------------------------- Registros INR
+
 class RegistroINRSerializer(serializers.ModelSerializer):
     class Meta:
         model = RegistroINR
         fields = ('id', 'usuario', 'valorINR', 'rangoTerapeuticoMin', 'rangoTerapeuticoMax',
                   'estadoAlerta', 'fechaLectura')
-        read_only_fields = ('id', 'usuario', 'estadoAlerta', 'fechaLectura')
+        read_only_fields = ('id', 'usuario', 'estadoAlerta')
+        extra_kwargs = {'fechaLectura': {'required': False}}
 
     @staticmethod
     def _en_rango(valor, campo):
@@ -177,6 +178,13 @@ class RegistroINRSerializer(serializers.ModelSerializer):
     def validate_rangoTerapeuticoMax(self, value):
         return self._en_rango(value, 'El máximo del rango')
 
+    def validate_fechaLectura(self, value):
+        if value > timezone.now() + timedelta(days=1):
+            raise serializers.ValidationError('La fecha de la lectura no puede estar en el futuro.')
+        if value.year < 2000:
+            raise serializers.ValidationError('La fecha de la lectura no es válida.')
+        return value
+
     def validate(self, attrs):
         minimo = attrs.get('rangoTerapeuticoMin', getattr(self.instance, 'rangoTerapeuticoMin', None))
         maximo = attrs.get('rangoTerapeuticoMax', getattr(self.instance, 'rangoTerapeuticoMax', None))
@@ -186,7 +194,7 @@ class RegistroINRSerializer(serializers.ModelSerializer):
         return attrs
 
 
-# ---------------------------------------------------------------- Tomas
+
 class RegistroTomaSerializer(serializers.ModelSerializer):
     medicamentoNombre = serializers.CharField(source='medicamento.nombre', read_only=True)
 
@@ -198,7 +206,7 @@ class RegistroTomaSerializer(serializers.ModelSerializer):
     def validate_medicamento(self, value):
         user = self.context['request'].user
         if not (es_admin(user) or value.usuario_id == user.pk):
-            # Mismo mensaje que "no existe": no revela medicamentos ajenos.
+            
             raise serializers.ValidationError('El medicamento no existe o no te pertenece.')
         return value
 
