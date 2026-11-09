@@ -11,6 +11,8 @@ const COLOR_ESTADO = { verde: '#16a34a', amarillo: '#f59e0b', rojo: '#dc2626' };
 let medicamentoEnAlerta = null;
 let intervaloAlertas = null;
 let sesion = 0;
+let fichaEnviada = '';
+let temporizadorFicha = null;
 let mesCalendario = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 const vistaAuth = $('vistaAuth');
 const vistaPanel = $('vistaPanel');
@@ -1153,7 +1155,6 @@ $('btnDescargarQR')?.addEventListener('click', () => {
   if (w) { w.document.write(`<title>QR cuidador</title><body style="text-align:center;font-family:sans-serif"><h2>HealthTech TACO — QR del cuidador</h2><img src="${src}" style="width:320px"><p>Escanéalo con la cámara del celular.</p></body>`); w.document.close(); }
   const a = document.createElement('a'); a.href = src; a.download = 'qr_cuidador_healthtech.png'; document.body.append(a); a.click(); a.remove();
 });
-let fichaEnviada = '';
 async function sincronizarFichaCuidador(forzar) {
   if (!accessToken) return;
   const proximos = [...controlesPorDia().keys()].filter(f => f >= fechaLocalISO(new Date())).sort();
@@ -1170,7 +1171,6 @@ async function sincronizarFichaCuidador(forzar) {
   if (!forzar && firma === fichaEnviada) return;
   try { await fetchAPI('/cuidador/ficha/', { method: 'PUT', body: firma }); fichaEnviada = firma; } catch (e) { /* se reintenta en el próximo cambio */ }
 }
-let temporizadorFicha = null;
 function programarSyncFicha() { clearTimeout(temporizadorFicha); temporizadorFicha = setTimeout(() => sincronizarFichaCuidador(false), 2000); }
 
 function pedirPermisoNotificaciones() {
