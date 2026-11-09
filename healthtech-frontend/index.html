@@ -10,7 +10,7 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
-/* --- Intro: pantalla completa, solo el video, fondo negro --- */
+
 #splash-screen{position:fixed;inset:0;width:100vw;height:100vh;height:100dvh;background:#000;display:flex;justify-content:center;align-items:center;z-index:99999}
 #intro-video{width:100%;height:100%;object-fit:cover;background:#000}
 body.intro-activa{background:#000!important;overflow:hidden}
@@ -23,7 +23,7 @@ body.intro-activa>*:not(#splash-screen){display:none!important}
 .progreso-card.inr-amarillo{border-left-color:#F2B705}
 .progreso-card.inr-rojo{border-left-color:var(--rojo-alerta)}
 .clima-actual{display:flex;align-items:center;gap:14px}.clima-icono-grande svg{width:48px;height:48px}.clima-temp-grande{font-size:28px;margin:0;color:var(--verde-oscuro);font-weight:500}.clima-sub{margin:2px 0 0;font-size:12px;color:var(--gris-texto)}.clima-pronostico{display:flex;gap:6px;margin-top:12px;overflow-x:auto}.clima-dia{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;color:var(--gris-texto);min-width:34px}.clima-dia svg{width:22px;height:22px}.clima-dia strong{font-size:11px;color:#16221e}
-/* --- Calendario en cuadrícula, semáforo de medicamentos y tarjetas --- */
+
 .calendario{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;justify-content:stretch}
 .calendario-semana{font-size:10px;color:#9baca3;font-weight:600;padding:2px 0}
 .calendario-hueco{display:block}
@@ -147,7 +147,7 @@ body.intro-activa>*:not(#splash-screen){display:none!important}
 <div id="modalTerminos" role="dialog" aria-modal="true" aria-labelledby="tituloTerminos"><div class="caja">
 <header><h2 id="tituloTerminos">TÉRMINOS Y CONDICIONES DE USO Y CONSENTIMIENTO INFORMADO</h2><p>Plataforma: HEALTHTECH - AlerTACO</p></header>
 <div class="cuerpo" id="cuerpoTerminos">
-<p>Al crear una cuenta y utilizar la aplicación móvil o plataforma web HEALTHTECH (en adelante, "La Plataforma"), usted acepta los siguientes términos, condiciones y políticas de privacidad estipuladas por Servicios Informáticos Alexis Enrique Pino Cárcamo E.I.R.L. (nombre de fantasía "Soluciones Informáticas 404"), RUT [TU_RUT_AQUI], con domicilio en Punta Arenas, Chile.</p>
+<p>Al crear una cuenta y utilizar la aplicación móvil o plataforma web HEALTHTECH (en adelante, "La Plataforma"), usted acepta los siguientes términos, condiciones y políticas de privacidad estipuladas por Servicios Informáticos Alexis Enrique Pino Cárcamo E.I.R.L. "Soluciones Informáticas 404", RUT 78.427.553-1, con domicilio en Punta Arenas, Chile.</p>
 <h3>1. Naturaleza asistencial del servicio (no es un médico virtual)</h3>
 <p>Usted comprende y acepta expresamente que HEALTHTECH no es un médico virtual, no emite diagnósticos, ni sustituye el consejo, tratamiento o supervisión de un profesional de la salud humano. La Plataforma es estrictamente una herramienta tecnológica de asistencia diseñada para:</p>
 <ul><li>Guiar y emitir alarmas recordatorias para la toma de sus medicamentos.</li><li>Ayudar en la lectura y organización visual de su hoja de dosificación TACO.</li><li>Servir como resguardo y organizador digital de su pastillero.</li></ul>
