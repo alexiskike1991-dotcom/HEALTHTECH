@@ -1,5 +1,4 @@
-// HealthTech TACO — conectado al backend de Django/DRF (Natt39/HEALTHTECH)
-// API_BASE_URL ya viene declarada en config.js (no la repetimos aquí para no romper la página)
+
 const API = `${String(API_BASE_URL).trim().replace(/\/+$/, '')}/api/v1`;
 const $ = id => document.getElementById(id);
 let accessToken = localStorage.getItem('taco_access') || null;
@@ -17,7 +16,7 @@ const formLogin = $('formLogin');
 const formRegistro = $('formRegistro');
 const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
-// ---------------------------------------------------------------- Conexión con la API (Django)
+
 async function fetchAPI(path, options = {}, _reintentando) {
   const headers = Object.assign({}, options.headers || {});
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
@@ -134,6 +133,84 @@ function pintarBarrasINR(registros) {
     b.append(t, barra, e); cont.append(b);
   });
 }
+
+
+function limpiarMedico(texto) {
+  if (!texto) return '';
+  let t = String(texto).replace(/\b\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]\b/g, '').replace(/\s{2,}/g, ' ').replace(/\s+,/g, ',').trim().replace(/^,|,$/g, '').trim();
+  if (t.includes(',')) { const [ap, ...no] = t.split(','); t = `${no.join(' ').trim()} ${ap.trim()}`.trim(); }
+  return t.toLowerCase().replace(/(^|\s)(\p{L})/gu, (m, s, c) => s + c.toUpperCase());
+}
+function pastillasSVG(n) {
+  const entero = Math.floor(n + 1e-9), frac = n - entero;
+  const R = 15, c = 17, base = `<circle cx="${c}" cy="${c}" r="${R}" fill="#fff" stroke="#0C8F68" stroke-width="2.5"/>`;
+  let out = '';
+  for (let i = 0; i < entero; i++) out += `<svg width="38" height="38" viewBox="0 0 34 34" aria-hidden="true"><circle cx="${c}" cy="${c}" r="${R}" fill="#00CC9F" stroke="#0C8F68" stroke-width="2.5"/><line x1="4" y1="${c}" x2="30" y2="${c}" stroke="#0C8F68" stroke-width="1.5"/></svg>`;
+  if (frac > 0.05) {
+    const ang = -Math.PI / 2 + 2 * Math.PI * frac;
+    const x = c + R * Math.cos(ang), y = c + R * Math.sin(ang), grande = frac > 0.5 ? 1 : 0;
+    out += `<svg width="38" height="38" viewBox="0 0 34 34" aria-hidden="true">${base}<path d="M${c},${c} L${c},${c - R} A${R},${R} 0 ${grande} 1 ${x.toFixed(2)},${y.toFixed(2)} Z" fill="#00CC9F"/></svg>`;
+  }
+  return out;
+}
+function pintarFicha() {
+  if (!$('fichaMedica')) return;
+  const medico = limpiarMedico(localStorage.getItem('taco_medico'));
+  $('fichaMedico').textContent = medico || 'No registrado';
+  const ult = localStorage.getItem('taco_ultimo_control');
+  $('fichaUltimoControl').textContent = ult ? formatearFechaISO(ult) : 'No registrado';
+  const proximos = [...controlesPorDia().keys()].filter(f => f >= fechaLocalISO(new Date())).sort();
+  $('fichaProximoControl').textContent = proximos.length ? formatearFechaISO(proximos[0]) : 'No registrado';
+  const diag = leerDiagnosticosGuardados();
+  const ul = $('fichaDiagnosticos'); ul.replaceChildren();
+  (diag.length ? diag : ['No registrados']).forEach(d => { const li = document.createElement('li'); li.textContent = String(d).replace(/[.,;\s]+$/, ''); ul.append(li); });
+}
+function pintarHoy() {
+  const cont = $('contenidoHoy'); if (!cont) return;
+  cont.replaceChildren();
+  const tomas = listaMedicamentosActual.filter(m => { const d = dosisDeHoy(m.horarioSemanal); return d && d !== '0'; });
+  if (!listaMedicamentosActual.length) { cont.innerHTML = '<p class="ficha-vacio">Aún no tienes medicamentos. Sube la foto de tu hoja más abajo, en "Escáner de recetas".</p>'; return; }
+  if (!tomas.length) { cont.innerHTML = '<p class="ficha-vacio">Hoy no te corresponde tomar ningún medicamento.</p>'; return; }
+  tomas.forEach(m => {
+    const dosis = dosisDeHoy(m.horarioSemanal);
+    const fila = document.createElement('div'); fila.className = 'hoy-item';
+    const datos = document.createElement('div'); datos.className = 'hoy-datos';
+    const nombre = document.createElement('strong'); nombre.textContent = m.nombre || 'Medicamento';
+    const detalle = document.createElement('span');
+    detalle.textContent = `Dosis: ${dosis} comprimido(s) · Hora: ${String(m.horaProgramada || '').slice(0, 5) || '—'}`;
+    datos.append(nombre, detalle);
+    const pil = document.createElement('div'); pil.className = 'hoy-pastillas'; pil.innerHTML = pastillasSVG(dosisANumero(dosis));
+    fila.append(datos, pil);
+    if (m.confirmadaHoy) { const ok = document.createElement('span'); ok.className = 'hoy-hecho'; ok.textContent = '✓ Ya lo tomaste'; fila.append(ok); }
+    else { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn-primary'; b.dataset.confirmarHoy = ''; b.dataset.id = m.id; b.textContent = 'Ya lo tomé'; fila.append(b); }
+    cont.append(fila);
+  });
+}
+$('tarjetaHoy')?.addEventListener('click', async e => {
+  const b = e.target.closest('[data-confirmar-hoy]'); if (!b) return;
+  b.disabled = true; b.textContent = 'Guardando…';
+  try { await fetchAPI(`/medicamentos/${b.dataset.id}/confirmar/`, { method: 'POST' }); await cargarMedicamentos(); }
+  catch (error) { alert(error.message || 'No se pudo conectar con el servidor.'); b.disabled = false; b.textContent = 'Ya lo tomé'; }
+});
+(function () {
+  let activo = false;
+  try { activo = localStorage.getItem('taco_texto_grande') === '1'; } catch (e) {}
+  const btn = $('btnTextoGrande');
+  function aplicar() { document.body.classList.toggle('texto-grande', activo); if (btn) { btn.setAttribute('aria-pressed', String(activo)); btn.textContent = activo ? 'A− Letra normal' : 'A+ Letra grande'; } }
+  aplicar();
+  btn?.addEventListener('click', () => { activo = !activo; try { localStorage.setItem('taco_texto_grande', activo ? '1' : '0'); } catch (e) {} aplicar(); });
+})();
+function nombreParecido(a, b) {
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').match(/[a-z]+/);
+  const x = (norm(a) || [''])[0], y = (norm(b) || [''])[0];
+  if (!x || !y) return false;
+  const d = Array.from({ length: x.length + 1 }, (_, i) => [i, ...Array(y.length).fill(0)]);
+  for (let j = 1; j <= y.length; j++) d[0][j] = j;
+  for (let i = 1; i <= x.length; i++) for (let j = 1; j <= y.length; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1));
+  return d[x.length][y.length] <= 2;
+}
+
 function contadorMedicamentos() {
   const cantidad = listaMedicamentosActual.length;
   if ($('totalMedicamentos')) $('totalMedicamentos').textContent = String(cantidad);
@@ -276,9 +353,22 @@ function pintarReporte(registros) {
 
   const resumen = $('reporteResumen');
   if (resumen) {
-    resumen.textContent = registros.length
-      ? `${registros.length} lectura(s) guardada(s). Última: INR ${ultimo.valorINR} (${fechaLegible(ultimo.fechaLectura)}).${ultimoCritico ? ' Fuera del rango terapéutico, contacta a tu médico.' : ''}`
-      : 'Aún no tienes lecturas INR guardadas.';
+    resumen.replaceChildren();
+    if (!registros.length) {
+      resumen.textContent = 'Aún no tienes lecturas INR guardadas.';
+    } else {
+      const v = numeroSeguro(ultimo.valorINR), mn = numeroSeguro(ultimo.rangoTerapeuticoMin), mx = numeroSeguro(ultimo.rangoTerapeuticoMax);
+      const estado = clasificarLectura(ultimo) || 'verde';
+      const caja = document.createElement('div'); caja.className = `alerta-inr ${estado}`;
+      let msg;
+      if (mn !== null && v < mn) msg = `Tu INR (${v}) está BAJO el rango (${mn} a ${mx}). Llama hoy a tu médico o a tu policlínico.`;
+      else if (mx !== null && v > mx) msg = `Tu INR (${v}) está ALTO sobre el rango (${mn} a ${mx}). Llama hoy a tu médico o a tu policlínico.`;
+      else msg = `Tu INR (${v}) está dentro de tu rango (${mn} a ${mx}).`;
+      caja.textContent = msg;
+      const pie = document.createElement('div'); pie.className = 'muted';
+      pie.textContent = `${registros.length} lectura(s) guardada(s). Última: ${fechaLegible(ultimo.fechaLectura)}.`;
+      resumen.append(caja, pie);
+    }
   }
 
   const svg = $('graficoINR'), vacio = $('graficoINRVacio'), fechas = $('graficoINRFechas');
@@ -443,26 +533,21 @@ function dibujarCalendario() {
     const siguiente = proximos[0];
     const textoControl = siguiente
       ? `Próximo control: ${formatearFechaISO(siguiente)} (${controles.get(siguiente).join(', ')})`
-      : 'No hay fechas de próximo control guardadas. Agrégalas al registrar un medicamento.';
-    const medico = localStorage.getItem('taco_medico') || 'No registrado';
+      : 'No hay fechas de próximo control guardadas.';
     descripcion.replaceChildren();
     const fila = document.createElement('div');
     fila.className = 'cita-fila';
     const cuerpo = document.createElement('div');
     const linea1 = document.createElement('strong');
     linea1.id = 'proximaConsultaTexto';
+    linea1.style.fontSize = '15px';
     linea1.textContent = textoControl;
-    const linea2 = document.createElement('small');
-    linea2.id = 'medicoTratante';
-    linea2.textContent = `Médico tratante: ${medico}`;
-    cuerpo.append(linea1, linea2);
-    const ult = localStorage.getItem('taco_ultimo_control');
-    if (ult) { const l3 = document.createElement('small'); l3.style.display = 'block'; l3.textContent = `Último control: ${formatearFechaISO(ult)}`; cuerpo.append(l3); }
-    const diag = leerDiagnosticosGuardados();
-    if (diag.length) { const l4 = document.createElement('small'); l4.style.display = 'block'; l4.textContent = `Diagnóstico: ${diag.join(', ')}`; cuerpo.append(l4); }
+    cuerpo.append(linea1);
     fila.append(cuerpo);
     descripcion.append(fila);
   }
+  pintarFicha();
+  pintarHoy();
 }
 $('mesAnterior')?.addEventListener('click', () => {
   mesCalendario = new Date(mesCalendario.getFullYear(), mesCalendario.getMonth() - 1, 1);
@@ -722,6 +807,13 @@ function fechaControlValida(valor) {
   const iso = fechaControlISO(valor);
   return iso && iso >= fechaLocalISO(new Date()) ? iso : null;
 }
+function historialINRValido(datos) {
+  const h = datos && Array.isArray(datos.historial_inr) ? datos.historial_inr : [];
+  const hoy = fechaLocalISO(new Date());
+  return h.map(x => ({ fecha: fechaControlISO(x && x.fecha), inr: Number(String((x && x.inr) ?? '').replace(',', '.')) }))
+    .filter(x => x.fecha && x.fecha <= hoy && Number.isFinite(x.inr) && x.inr > 0 && x.inr < 15)
+    .map(x => ({ fecha: x.fecha, inr: String(x.inr) }));
+}
 function diagnosticosLista(datos) {
   const d = datos && datos.diagnosticos;
   if (Array.isArray(d)) return d.map(x => String(x).trim()).filter(Boolean);
@@ -746,6 +838,7 @@ function mostrarPopupReceta(datosExtraidos) {
       <p><strong>Último control:</strong> ${seguroHTML(datosExtraidos.fecha_ultimo_control ?? 'No indicado')}</p>
       <p><strong>Próximo control:</strong> ${seguroHTML(datosExtraidos.fecha_control ?? 'No indicado')}</p>
       <p><strong>Diagnóstico(s):</strong> ${seguroHTML(diagnosticosLista(datosExtraidos).join(', ') || 'No indicado')}</p>
+      ${historialINRValido(datosExtraidos).length ? `<p><strong>Historial INR de la hoja:</strong></p><ul style="margin:4px 0 0 18px;padding:0">${historialINRValido(datosExtraidos).map(h => `<li>${seguroHTML(formatearFechaISO(h.fecha))}: INR ${seguroHTML(h.inr)}</li>`).join('')}</ul>` : ''}
       ${medicamentos.map((med, i) => `
         <div style="border-top:1px solid #eee;margin-top:10px;padding-top:10px">
           <p><strong>Medicamento ${medicamentos.length > 1 ? i + 1 : ''}:</strong> ${seguroHTML(med.nombre ?? 'No indicado')}</p>
@@ -772,7 +865,7 @@ function mostrarPopupReceta(datosExtraidos) {
         proximoControl: fechaControlValida(datosExtraidos.fecha_control)
       }));
       limpiar();
-      resolve({ inr, min, max, medico: datosExtraidos.medico || null, ultimoControl: fechaControlISO(datosExtraidos.fecha_ultimo_control), diagnosticos: diagnosticosLista(datosExtraidos), medicamentos: medicamentosConfirmados });
+      resolve({ inr, min, max, medico: datosExtraidos.medico || null, ultimoControl: fechaControlISO(datosExtraidos.fecha_ultimo_control), diagnosticos: diagnosticosLista(datosExtraidos), historial: historialINRValido(datosExtraidos), medicamentos: medicamentosConfirmados });
     };
   });
 }
@@ -807,16 +900,41 @@ $('formReceta')?.addEventListener('submit', async e => {
     if (confirmado.diagnosticos && confirmado.diagnosticos.length) localStorage.setItem('taco_diagnosticos', JSON.stringify(confirmado.diagnosticos));
 
     let registroGuardado = null;
-    if (confirmado.inr !== null && confirmado.min !== null && confirmado.max !== null) {
-      const resRegistro = await fetchAPI('/registros-inr/', {
-        method: 'POST',
-        body: JSON.stringify({ valorINR: confirmado.inr, rangoTerapeuticoMin: confirmado.min, rangoTerapeuticoMax: confirmado.max })
-      });
-      registroGuardado = resRegistro.data;
+    if (confirmado.min !== null && confirmado.max !== null) {
+      if (confirmado.historial && confirmado.historial.length) {
+        const previos = await fetchAPI('/registros-inr/?page_size=100');
+        const existentes = new Set((previos.data?.results || []).map(r => `${fechaLocalISO(new Date(r.fechaLectura))}|${Number(r.valorINR)}`));
+        for (const h of confirmado.historial) {
+          if (existentes.has(`${h.fecha}|${Number(h.inr)}`)) continue;
+          const res = await fetchAPI('/registros-inr/', {
+            method: 'POST',
+            body: JSON.stringify({ valorINR: Number(h.inr), rangoTerapeuticoMin: confirmado.min, rangoTerapeuticoMax: confirmado.max, fechaLectura: new Date(`${h.fecha}T12:00:00`).toISOString() })
+          });
+          if (!registroGuardado) registroGuardado = res.data;
+        }
+        if (!registroGuardado) registroGuardado = { valorINR: confirmado.historial[0].inr, rangoTerapeuticoMin: confirmado.min, rangoTerapeuticoMax: confirmado.max };
+      } else if (confirmado.inr !== null) {
+        const resRegistro = await fetchAPI('/registros-inr/', {
+          method: 'POST',
+          body: JSON.stringify({ valorINR: confirmado.inr, rangoTerapeuticoMin: confirmado.min, rangoTerapeuticoMax: confirmado.max })
+        });
+        registroGuardado = resRegistro.data;
+      }
     }
 
+    await cargarMedicamentos();
+    const yaUsados = new Set();
     for (const med of confirmado.medicamentos) {
-      await fetchAPI('/medicamentos/', { method: 'POST', body: JSON.stringify(med) });
+      const existente = listaMedicamentosActual.find(x => !yaUsados.has(x.id) && nombreParecido(x.nombre, med.nombre));
+      if (existente) {
+        yaUsados.add(existente.id);
+        const cambios = { ...med };
+        if (!cambios.proximoControl) delete cambios.proximoControl;
+        if (cambios.unidadPastilla === 'No indicada' && existente.unidadPastilla) delete cambios.unidadPastilla;
+        await fetchAPI(`/medicamentos/${existente.id}/`, { method: 'PATCH', body: JSON.stringify(cambios) });
+      } else {
+        await fetchAPI('/medicamentos/', { method: 'POST', body: JSON.stringify(med) });
+      }
     }
 
     if (resultado) {
@@ -903,6 +1021,7 @@ async function cargarMedicamentos() {
         <p>Dosis por día: ${seguroHTML(diasSemanaResumen(m.horarioSemanal))}</p>
         <p>Próximo control: ${seguroHTML(fechaLegible(m.proximoControl))}</p>
         ${accion}
+        <button type="button" class="btn-eliminar" data-eliminar-med data-id="${m.id}" data-nombre="${seguroHTML(m.nombre || '')}">Eliminar este medicamento</button>
       </article></li>`;
     }).join('');
   } catch (error) {
@@ -912,6 +1031,14 @@ async function cargarMedicamentos() {
   }
 }
 $('listaMedicamentos')?.addEventListener('click', async e => {
+  const del = e.target.closest('[data-eliminar-med]');
+  if (del) {
+    if (!confirm(`¿Eliminar "${del.dataset.nombre}" de tu lista? Esta acción no se puede deshacer.`)) return;
+    del.disabled = true;
+    try { await fetchAPI(`/medicamentos/${del.dataset.id}/`, { method: 'DELETE' }); await cargarMedicamentos(); }
+    catch (error) { alert(error.message || 'No se pudo eliminar.'); del.disabled = false; }
+    return;
+  }
   const boton = e.target.closest('[data-confirmar-toma]');
   if (!boton) return;
   const idMedicamento = boton.dataset.id;
@@ -928,6 +1055,14 @@ $('listaMedicamentos')?.addEventListener('click', async e => {
   }
 });
 
+$('listaHistorial')?.addEventListener('click', async e => {
+  const del = e.target.closest('[data-eliminar-inr]'); if (!del) return;
+  if (!confirm('¿Eliminar esta lectura de INR? Esta acción no se puede deshacer.')) return;
+  del.disabled = true;
+  try { await fetchAPI(`/registros-inr/${del.dataset.id}/`, { method: 'DELETE' }); await cargarHistorial(); }
+  catch (error) { alert(error.message || 'No se pudo eliminar.'); del.disabled = false; }
+});
+
 async function cargarHistorial() {
   const lista = $('listaHistorial'); if (!lista || !accessToken || !idUsuario) return;
   const sesionAlSolicitar = sesion, tokenAlSolicitar = accessToken;
@@ -939,7 +1074,7 @@ async function cargarHistorial() {
     pintarReporte(registros);
     pintarEstadisticas(registros);
     if (!registros.length) { lista.innerHTML = '<li>No hay registros INR guardados.</li>'; return; }
-    lista.innerHTML = registros.map(r => `<li><article class="historial-item"><p><strong>Fecha:</strong> ${seguroHTML(fechaLegible(r.fechaLectura))}</p><p><strong>INR:</strong> ${seguroHTML(r.valorINR ?? 'N/A')}</p><p><strong>Rango:</strong> ${seguroHTML(r.rangoTerapeuticoMin ?? 'N/A')} - ${seguroHTML(r.rangoTerapeuticoMax ?? 'N/A')}</p><p class="muted">${clasificarLectura(r) === 'rojo' ? 'Fuera del rango terapéutico' : 'Dentro del rango normal'}</p></article></li>`).join('');
+    lista.innerHTML = registros.map(r => `<li><article class="historial-item"><p><strong>Fecha:</strong> ${seguroHTML(fechaLegible(r.fechaLectura))}</p><p><strong>INR:</strong> ${seguroHTML(r.valorINR ?? 'N/A')}</p><p><strong>Rango:</strong> ${seguroHTML(r.rangoTerapeuticoMin ?? 'N/A')} - ${seguroHTML(r.rangoTerapeuticoMax ?? 'N/A')}</p><p class="muted">${clasificarLectura(r) === 'rojo' ? 'Fuera del rango terapéutico' : 'Dentro del rango normal'}</p><button type="button" class="btn-eliminar" data-eliminar-inr data-id="${r.id}">Eliminar esta lectura</button></article></li>`).join('');
   } catch (error) {
     if (sesionAlSolicitar !== sesion) return;
     console.error('Error cargando historial:', error);
@@ -1087,34 +1222,31 @@ function reproducirIntro(alTerminar) {
   let terminado = false;
   let respaldo = null;
   const terminar = function () {
-    if (terminado) return;          // evita ejecutarse dos veces
+    if (terminado) return;         
     terminado = true;
     clearTimeout(respaldo);
     video.removeEventListener('ended', terminar);
     video.pause();
       document.body.classList.remove('intro-activa');
     splash.classList.add('hidden');
-    if (alTerminar) alTerminar();   // recién aquí se muestra el panel del paciente
+    if (alTerminar) alTerminar();   
   };
 
-  video.addEventListener('ended', terminar);   // se cierra cuando el video TERMINA, no por tiempo fijo
+  video.addEventListener('ended', terminar);   
     document.body.classList.add('intro-activa');
   splash.classList.remove('hidden');
   video.currentTime = 0;
   video.muted = true;
   video.play().catch(function (e) {
     console.warn('No se pudo reproducir la intro:', e);
-    terminar();                     // si el navegador la bloquea, no dejamos al usuario atrapado
+    terminar();                     
   });
 
-  // Respaldo de seguridad: duración real del video + 3 segundos
+  
   const duracion = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 8;
   respaldo = setTimeout(terminar, (duracion + 3) * 1000);
 }
-// ---------------------------------------------------------------------------
-// Pantalla de acceso: cambio entre "Iniciar sesión" y "Crear cuenta" (tarjeta que gira),
-// ojo de la contraseña y botones secundarios. Sin esto, "Crear cuenta" no hace nada.
-// ---------------------------------------------------------------------------
+
 (function () {
   const tarjeta = $('flipCard');
   const caraLogin = $('caraLogin');
@@ -1123,11 +1255,11 @@ function reproducirIntro(alTerminar) {
 
   function mostrarCara(registro) {
     if (!tarjeta || !caraLogin || !caraRegistro) return;
-    tarjeta.classList.add('is-animating');             // mantiene visibles ambas caras durante el giro
+    tarjeta.classList.add('is-animating');             
     tarjeta.classList.toggle('is-flipped', registro);
     caraLogin.setAttribute('aria-hidden', String(registro));
     caraRegistro.setAttribute('aria-hidden', String(!registro));
-    caraLogin.inert = registro;                         // la cara oculta no recibe foco ni clics
+    caraLogin.inert = registro;                         
     caraRegistro.inert = !registro;
     ['mensajeAuth', 'mensajeRegistro'].forEach(id => { if ($(id)) $(id).textContent = ''; });
     clearTimeout(temporizador);
@@ -1141,7 +1273,7 @@ function reproducirIntro(alTerminar) {
   $('tabRegistro')?.addEventListener('click', () => mostrarCara(true));
   $('tabLogin')?.addEventListener('click', () => mostrarCara(false));
 
-  // Ojo: mostrar / ocultar contraseña
+  
   document.querySelectorAll('.toggle-eye').forEach(boton => {
     boton.addEventListener('click', () => {
       const campo = $(boton.dataset.target);
@@ -1152,7 +1284,7 @@ function reproducirIntro(alTerminar) {
     });
   });
 
-  // Funciones que el backend aún no ofrece: se avisa en lugar de dejar el botón "muerto"
+  
   $('linkOlvideContrasena')?.addEventListener('click', e => {
     e.preventDefault();
     if ($('mensajeAuth')) $('mensajeAuth').textContent = 'La recuperación de contraseña aún no está disponible. Contacta al administrador.';
