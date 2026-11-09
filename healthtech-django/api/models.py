@@ -1,3 +1,5 @@
+import secrets
+
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
@@ -19,12 +21,12 @@ class PerfilUsuario(models.Model):
 
 
 class Medicamento(models.Model):
-   
+    
     usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='medicamentos')
     nombre = models.CharField(max_length=100)
     unidadPastilla = models.CharField(max_length=100)
     horaProgramada = models.TimeField()
-   
+    
     horarioSemanal = models.JSONField()
     periodicidad = models.CharField(max_length=50, default='semanal')
     proximoControl = models.DateField(null=True, blank=True)
@@ -67,7 +69,7 @@ class RegistroToma(models.Model):
 
 
 class RegistroINR(models.Model):
- 
+    
     usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='registros_inr')
     valorINR = models.FloatField()
     rangoTerapeuticoMin = models.FloatField()
@@ -85,3 +87,24 @@ class RegistroINR(models.Model):
     @property
     def propietario(self):
         return self.usuario
+
+
+def _nuevo_token():
+    return secrets.token_urlsafe(24)
+
+
+class EnlaceCuidador(models.Model):
+    """Enlace secreto y permanente (el del QR) para que un cuidador vea, SOLO LECTURA, la ficha del paciente."""
+
+    usuario = models.OneToOneField(User, on_delete=models.CASCADE, related_name='enlace_cuidador')
+    token = models.CharField(max_length=64, unique=True, default=_nuevo_token, db_index=True)
+    
+    ficha = models.JSONField(default=dict, blank=True)
+    creado = models.DateTimeField(auto_now_add=True)
+
+    def regenerar(self):
+        self.token = _nuevo_token()
+        self.save(update_fields=['token'])
+
+    def __str__(self):
+        return f'Enlace cuidador de {self.usuario.username}'
