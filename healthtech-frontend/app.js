@@ -1,4 +1,5 @@
-
+// HealthTech TACO — conectado al backend de Django/DRF (Natt39/HEALTHTECH)
+// API_BASE_URL ya viene declarada en config.js (no la repetimos aquí para no romper la página)
 const API = `${String(API_BASE_URL).trim().replace(/\/+$/, '')}/api/v1`;
 const $ = id => document.getElementById(id);
 let accessToken = localStorage.getItem('taco_access') || null;
@@ -17,7 +18,7 @@ const formLogin = $('formLogin');
 const formRegistro = $('formRegistro');
 const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
-
+// ---------------------------------------------------------------- Conexión con la API (Django)
 async function fetchAPI(path, options = {}, _reintentando) {
   const headers = Object.assign({}, options.headers || {});
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
@@ -135,7 +136,7 @@ function pintarBarrasINR(registros) {
   });
 }
 
-
+// ---------------------------------------------------------------- Ficha médica, "Hoy" y accesibilidad
 function limpiarMedico(texto) {
   if (!texto) return '';
   let t = String(texto).replace(/\b\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]\b/g, '').replace(/\s{2,}/g, ' ').replace(/\s+,/g, ',').trim().replace(/^,|,$/g, '').trim();
@@ -173,6 +174,7 @@ function pintarFicha() {
   const diag = leerDiagnosticosGuardados();
   const ul = $('fichaDiagnosticos'); ul.replaceChildren();
   (diag.length ? diag : ['No registrados']).forEach(d => { const li = document.createElement('li'); li.textContent = String(d).replace(/[.,;\s]+$/, ''); ul.append(li); });
+  programarSyncFicha();
 }
 function pintarHoy() {
   const cont = $('contenidoHoy'); if (!cont) return;
@@ -781,7 +783,7 @@ $('btnSalir')?.addEventListener('click', async () => {
   contadorMedicamentos(); nombreEnPantalla('Paciente'); pintarReporte([]); mostrarAuth();
 });
 
-
+// ---------------------------------------------------------------- Escáner de recetas (IA de Gemini vía Django)
 function crearPopupReceta() {
   if ($('popupReceta')) return $('popupReceta');
   const overlay = document.createElement('div');
@@ -1112,9 +1114,64 @@ async function cargarHistorial() {
 }
 $('btnActualizarHistorial')?.addEventListener('click', cargarHistorial);
 
-$('btnGenerarQR')?.addEventListener('click', () => {
-  alert('La identificación QR de emergencia todavía no está disponible en el sistema de tu compañera. Vamos a verlo con ella para agregarla más adelante.');
+// ---------------------------------------------------------------- QR permanente para el cuidador (solo lectura)
+function urlCuidador(token) {
+  const base = location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '');
+  return `${base}cuidador.html?t=${encodeURIComponent(token)}`;
+}
+function dibujarQR(token) {
+  const cont = $('qrcode-container'); if (!cont) return;
+  cont.replaceChildren();
+  const url = urlCuidador(token);
+  if (typeof QRCode === 'undefined') { cont.textContent = 'No se pudo cargar el generador de QR. Revisa tu conexión.'; return; }
+  new QRCode(cont, { text: url, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
+  if ($('qrAcciones')) $('qrAcciones').hidden = false;
+  if ($('qrEnlaceTexto')) $('qrEnlaceTexto').textContent = url;
+}
+async function mostrarQRCuidador(nuevo) {
+  const btn = $('btnGenerarQR'); if (btn) btn.disabled = true;
+  try {
+    await sincronizarFichaCuidador(true);
+    const r = await fetchAPI('/cuidador/enlace/', { method: nuevo ? 'POST' : 'GET' });
+    dibujarQR(r.token);
+  } catch (e) { alert(e.message || 'No se pudo generar el QR.'); }
+  finally { if (btn) btn.disabled = false; }
+}
+$('btnGenerarQR')?.addEventListener('click', () => mostrarQRCuidador(false));
+$('btnNuevoQR')?.addEventListener('click', () => {
+  if (!confirm('¿Seguro? El QR actual dejará de funcionar para tu cuidador.')) return;
+  if (!confirm('Última confirmación: se creará un QR nuevo y tendrás que entregárselo de nuevo a quien lo use.')) return;
+  mostrarQRCuidador(true);
 });
+$('btnDescargarQR')?.addEventListener('click', () => {
+  const cont = $('qrcode-container');
+  const canvas = cont && cont.querySelector('canvas');
+  const img = cont && cont.querySelector('img');
+  const src = canvas ? canvas.toDataURL('image/png') : (img ? img.src : null);
+  if (!src) return;
+  const w = window.open('', '_blank');
+  if (w) { w.document.write(`<title>QR cuidador</title><body style="text-align:center;font-family:sans-serif"><h2>HealthTech TACO — QR del cuidador</h2><img src="${src}" style="width:320px"><p>Escanéalo con la cámara del celular.</p></body>`); w.document.close(); }
+  const a = document.createElement('a'); a.href = src; a.download = 'qr_cuidador_healthtech.png'; document.body.append(a); a.click(); a.remove();
+});
+let fichaEnviada = '';
+async function sincronizarFichaCuidador(forzar) {
+  if (!accessToken) return;
+  const proximos = [...controlesPorDia().keys()].filter(f => f >= fechaLocalISO(new Date())).sort();
+  const ficha = {
+    medico: limpiarMedico(localStorage.getItem('taco_medico')) || '',
+    ultimoControl: localStorage.getItem('taco_ultimo_control') || '',
+    proximoControl: proximos[0] || '',
+    diagnosticos: leerDiagnosticosGuardados()
+  };
+  const vacia = !ficha.medico && !ficha.ultimoControl && !ficha.diagnosticos.length;
+  const todoBorrado = fichaCarga.med && fichaCarga.inr && !listaMedicamentosActual.length && fichaCarga.totalINR === 0;
+  if (vacia && !todoBorrado) return; // en un dispositivo nuevo no se pisa la ficha guardada en el servidor
+  const firma = JSON.stringify(ficha);
+  if (!forzar && firma === fichaEnviada) return;
+  try { await fetchAPI('/cuidador/ficha/', { method: 'PUT', body: firma }); fichaEnviada = firma; } catch (e) { /* se reintenta en el próximo cambio */ }
+}
+let temporizadorFicha = null;
+function programarSyncFicha() { clearTimeout(temporizadorFicha); temporizadorFicha = setTimeout(() => sincronizarFichaCuidador(false), 2000); }
 
 function pedirPermisoNotificaciones() {
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
@@ -1250,31 +1307,34 @@ function reproducirIntro(alTerminar) {
   let terminado = false;
   let respaldo = null;
   const terminar = function () {
-    if (terminado) return;          
+    if (terminado) return;          // evita ejecutarse dos veces
     terminado = true;
     clearTimeout(respaldo);
     video.removeEventListener('ended', terminar);
     video.pause();
       document.body.classList.remove('intro-activa');
     splash.classList.add('hidden');
-    if (alTerminar) alTerminar();   
+    if (alTerminar) alTerminar();   // recién aquí se muestra el panel del paciente
   };
 
-  video.addEventListener('ended', terminar);   
+  video.addEventListener('ended', terminar);   // se cierra cuando el video TERMINA, no por tiempo fijo
     document.body.classList.add('intro-activa');
   splash.classList.remove('hidden');
   video.currentTime = 0;
   video.muted = true;
   video.play().catch(function (e) {
     console.warn('No se pudo reproducir la intro:', e);
-    terminar();                     
+    terminar();                     // si el navegador la bloquea, no dejamos al usuario atrapado
   });
 
-  
+  // Respaldo de seguridad: duración real del video + 3 segundos
   const duracion = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 8;
   respaldo = setTimeout(terminar, (duracion + 3) * 1000);
 }
-
+// ---------------------------------------------------------------------------
+// Pantalla de acceso: cambio entre "Iniciar sesión" y "Crear cuenta" (tarjeta que gira),
+// ojo de la contraseña y botones secundarios. Sin esto, "Crear cuenta" no hace nada.
+// ---------------------------------------------------------------------------
 (function () {
   const tarjeta = $('flipCard');
   const caraLogin = $('caraLogin');
@@ -1283,11 +1343,11 @@ function reproducirIntro(alTerminar) {
 
   function mostrarCara(registro) {
     if (!tarjeta || !caraLogin || !caraRegistro) return;
-    tarjeta.classList.add('is-animating');             
+    tarjeta.classList.add('is-animating');             // mantiene visibles ambas caras durante el giro
     tarjeta.classList.toggle('is-flipped', registro);
     caraLogin.setAttribute('aria-hidden', String(registro));
     caraRegistro.setAttribute('aria-hidden', String(!registro));
-    caraLogin.inert = registro;                         
+    caraLogin.inert = registro;                         // la cara oculta no recibe foco ni clics
     caraRegistro.inert = !registro;
     ['mensajeAuth', 'mensajeRegistro'].forEach(id => { if ($(id)) $(id).textContent = ''; });
     clearTimeout(temporizador);
@@ -1301,7 +1361,7 @@ function reproducirIntro(alTerminar) {
   $('tabRegistro')?.addEventListener('click', () => mostrarCara(true));
   $('tabLogin')?.addEventListener('click', () => mostrarCara(false));
 
-  
+  // Ojo: mostrar / ocultar contraseña
   document.querySelectorAll('.toggle-eye').forEach(boton => {
     boton.addEventListener('click', () => {
       const campo = $(boton.dataset.target);
@@ -1312,7 +1372,7 @@ function reproducirIntro(alTerminar) {
     });
   });
 
-  
+  // Funciones que el backend aún no ofrece: se avisa en lugar de dejar el botón "muerto"
   $('linkOlvideContrasena')?.addEventListener('click', e => {
     e.preventDefault();
     if ($('mensajeAuth')) $('mensajeAuth').textContent = 'La recuperación de contraseña aún no está disponible. Contacta al administrador.';
