@@ -117,9 +117,18 @@ body.intro-activa>*:not(#splash-screen){display:none!important}
         </section>
 
         <section class="herramienta">
-          <h2>Identificación QR</h2>
-          <button id="btnGenerarQR" type="button" class="btn-primary">Generar QR de emergencia</button>
+          <h2>QR para mi cuidador</h2>
+          <p>Quien escanee este QR verá tu ficha (INR, medicamentos de hoy, médico y controles) sin iniciar sesión. Solo puede mirar, no cambiar nada. Este QR es permanente.</p>
+          <button id="btnGenerarQR" type="button" class="btn-primary">Mostrar mi QR</button>
           <div id="qrcode-container" style="margin-top: 15px; display: flex; justify-content: center;"></div>
+          <div id="qrAcciones" hidden style="text-align:center;margin-top:10px">
+            <button id="btnDescargarQR" type="button" class="btn-primary">Descargar / imprimir QR</button>
+            <p class="muted" id="qrEnlaceTexto" style="word-break:break-all;font-size:.8rem"></p>
+          </div>
+          <details style="margin-top:14px"><summary class="muted">Opciones avanzadas</summary>
+            <p class="muted">Si perdiste el QR o no quieres que lo siga usando alguien, crea uno nuevo. El anterior dejará de funcionar y tendrás que entregar el nuevo.</p>
+            <button id="btnNuevoQR" type="button" class="btn-eliminar">Crear un QR nuevo</button>
+          </details>
         </section>
 
         <section class="herramienta">
@@ -147,7 +156,7 @@ body.intro-activa>*:not(#splash-screen){display:none!important}
 <div id="modalTerminos" role="dialog" aria-modal="true" aria-labelledby="tituloTerminos"><div class="caja">
 <header><h2 id="tituloTerminos">TÉRMINOS Y CONDICIONES DE USO Y CONSENTIMIENTO INFORMADO</h2><p>Plataforma: HEALTHTECH - AlerTACO</p></header>
 <div class="cuerpo" id="cuerpoTerminos">
-<p>Al crear una cuenta y utilizar la aplicación móvil o plataforma web HEALTHTECH (en adelante, "La Plataforma"), usted acepta los siguientes términos, condiciones y políticas de privacidad estipuladas por Servicios Informáticos Alexis Enrique Pino Cárcamo E.I.R.L."Soluciones Informáticas 404", RUT 78.427.553-1, con domicilio en Punta Arenas, Chile.</p>
+<p>Al crear una cuenta y utilizar la aplicación móvil o plataforma web HEALTHTECH (en adelante, "La Plataforma"), usted acepta los siguientes términos, condiciones y políticas de privacidad estipuladas por Servicios Informáticos Alexis Enrique Pino Cárcamo E.I.R.L. "Soluciones Informáticas 404", RUT 78.427.553-1, con domicilio en Punta Arenas, Chile.</p>
 <h3>1. Naturaleza asistencial del servicio (no es un médico virtual)</h3>
 <p>Usted comprende y acepta expresamente que HEALTHTECH no es un médico virtual, no emite diagnósticos, ni sustituye el consejo, tratamiento o supervisión de un profesional de la salud humano. La Plataforma es estrictamente una herramienta tecnológica de asistencia diseñada para:</p>
 <ul><li>Guiar y emitir alarmas recordatorias para la toma de sus medicamentos.</li><li>Ayudar en la lectura y organización visual de su hoja de dosificación TACO.</li><li>Servir como resguardo y organizador digital de su pastillero.</li></ul>
@@ -160,6 +169,8 @@ body.intro-activa>*:not(#splash-screen){display:none!important}
 <h3>4. Responsabilidad del usuario</h3>
 <p>El usuario (o su cuidador responsable) se compromete a:</p>
 <ul><li>Subir fotografías claras y legibles de la hoja de dosificación oficial entregada por su centro de salud.</li><li>Verificar visualmente que los datos leídos por la aplicación (dosis y días) coincidan con el papel original antes de confirmar el horario semanal.</li><li>Mantener su teléfono con batería, volumen adecuado y conexión a internet para garantizar la recepción de las alarmas (alertas "tsunami").</li></ul>
+<h3>4 bis. QR para el cuidador</h3>
+<p>La función "QR para mi cuidador" permite que cualquier persona que posea ese código vea, solo en modo lectura y sin iniciar sesión, tus lecturas de INR, medicamentos, médico, controles y diagnósticos. Al generarlo, decides voluntariamente compartir esos datos de salud y eres responsable de resguardar el código como si fuera una llave. Puedes anularlo en cualquier momento creando un QR nuevo desde "Opciones avanzadas".</p>
 <h3>5. Limitación de responsabilidad</h3>
 <p>Dado que el funcionamiento de La Plataforma depende de factores externos (conexión a internet del usuario, estado de la batería del dispositivo móvil, fallas en los sistemas operativos Android/iOS, o legibilidad de la receta original), Soluciones Informáticas 404 no se hace responsable por daños a la salud derivados de dosis no tomadas por fallas de red, olvidos del paciente, o discrepancias no verificadas por el usuario entre el papel original y la aplicación. La responsabilidad final de la ingesta correcta del medicamento recae sobre el paciente y su equipo médico.</p>
 <p class="aviso"><strong>He leído, comprendo y acepto los Términos y Condiciones.</strong> Entiendo que HEALTHTECH es una alarma y organizador de mi pastillero, y NO reemplaza las indicaciones directas de mi médico tratante.</p>
