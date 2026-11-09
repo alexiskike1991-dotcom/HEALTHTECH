@@ -252,6 +252,8 @@ function mostrarPanel() {
   cargarClimaCiudad();
   pedirPermisoNotificaciones();
   iniciarRevisionDeAlertas();
+  limpiarQR();
+  mostrarQRCuidador(false, true).then(() => { if (!$('qrcode-container')?.hasChildNodes()) setTimeout(() => mostrarQRCuidador(false, true), 8000); });
 }
 function mostrarAuth() {
   sesion++;
@@ -782,7 +784,7 @@ $('btnSalir')?.addEventListener('click', async () => {
   localStorage.removeItem('taco_id'); localStorage.removeItem('taco_nombre');
   accessToken = null; refreshToken = null; idUsuario = null; listaMedicamentosActual = [];
   fichaCarga = { med: false, inr: false, totalINR: 0 }; limpiarFicha();
-  contadorMedicamentos(); nombreEnPantalla('Paciente'); pintarReporte([]); mostrarAuth();
+  limpiarQR(); contadorMedicamentos(); nombreEnPantalla('Paciente'); pintarReporte([]); mostrarAuth();
 });
 
 // ---------------------------------------------------------------- Escáner de recetas (IA de Gemini vía Django)
@@ -1121,6 +1123,11 @@ function urlCuidador(token) {
   const base = location.href.split('#')[0].split('?')[0].replace(/[^/]*$/, '');
   return `${base}cuidador.html?t=${encodeURIComponent(token)}`;
 }
+function limpiarQR() {
+  const c = $('qrcode-container'); if (c) c.replaceChildren();
+  if ($('qrAcciones')) $('qrAcciones').hidden = true;
+  if ($('btnGenerarQR')) $('btnGenerarQR').hidden = false;
+}
 function dibujarQR(token) {
   const cont = $('qrcode-container'); if (!cont) return;
   cont.replaceChildren();
@@ -1128,15 +1135,16 @@ function dibujarQR(token) {
   if (typeof QRCode === 'undefined') { cont.textContent = 'No se pudo cargar el generador de QR. Revisa tu conexión.'; return; }
   new QRCode(cont, { text: url, width: 240, height: 240, correctLevel: QRCode.CorrectLevel.M });
   if ($('qrAcciones')) $('qrAcciones').hidden = false;
+  if ($('btnGenerarQR')) $('btnGenerarQR').hidden = true;
   if ($('qrEnlaceTexto')) $('qrEnlaceTexto').textContent = url;
 }
-async function mostrarQRCuidador(nuevo) {
+async function mostrarQRCuidador(nuevo, silencioso) {
   const btn = $('btnGenerarQR'); if (btn) btn.disabled = true;
   try {
     await sincronizarFichaCuidador(true);
     const r = await fetchAPI('/cuidador/enlace/', { method: nuevo ? 'POST' : 'GET' });
     dibujarQR(r.token);
-  } catch (e) { alert(e.message || 'No se pudo generar el QR.'); }
+  } catch (e) { if (!silencioso) alert(e.message || 'No se pudo generar el QR.'); }
   finally { if (btn) btn.disabled = false; }
 }
 $('btnGenerarQR')?.addEventListener('click', () => mostrarQRCuidador(false));
