@@ -20,6 +20,17 @@ ESQUEMA_RECETA = {
         'fecha_control': {'type': ['string', 'null']},
         'fecha_ultimo_control': {'type': ['string', 'null']},
         'diagnosticos': {'type': 'array', 'items': {'type': 'string'}},
+        'historial_inr': {
+            'type': 'array',
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'fecha': {'type': ['string', 'null']},
+                    'inr': {'type': ['string', 'null']},
+                },
+                'required': ['fecha', 'inr'],
+            },
+        },
         'medicamentos': {
             'type': 'array',
             'items': {
@@ -37,7 +48,7 @@ ESQUEMA_RECETA = {
         },
     },
     'required': ['inr_actual', 'rango_terapeutico', 'medico', 'fecha_control',
-                 'fecha_ultimo_control', 'diagnosticos', 'medicamentos'],
+                 'fecha_ultimo_control', 'diagnosticos', 'historial_inr', 'medicamentos'],
 }
 
 INSTRUCCIONES_RECETA = '''
@@ -48,6 +59,9 @@ Extrae la fecha del PRÓXIMO control (fecha_control) y la fecha del ÚLTIMO cont
 ambas en formato YYYY-MM-DD (día/mes/año chileno: 05/11/2026 es 2026-11-05); si no se distingue con claridad, null.
 Extrae TODOS los diagnósticos que aparezcan escritos en la hoja, uno por elemento de la lista diagnosticos,
 tal como están escritos; si no hay ninguno, lista vacía.
+Si hay una tabla con columnas Fecha e INR, copia TODAS sus filas en historial_inr, de la más reciente a la más antigua:
+fecha en formato YYYY-MM-DD (solo la fecha, sin hora; día/mes/año chileno) e inr tal como está escrito (ej. 1.5).
+Si no hay tabla, lista vacía.
 Extrae nombre del medicamento y gramaje solo si aparecen claramente.
 Copia la dosis EXACTAMENTE como aparece para lunes a domingo,
 incluyendo fracciones como 1+1/4 o 1+1/2. Si alguna dosis no se distingue, escribe null.
