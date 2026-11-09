@@ -19,12 +19,12 @@ class PerfilUsuario(models.Model):
 
 
 class Medicamento(models.Model):
-    # Un usuario tiene muchos medicamentos (One-to-Many)
+   
     usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='medicamentos')
     nombre = models.CharField(max_length=100)
     unidadPastilla = models.CharField(max_length=100)
     horaProgramada = models.TimeField()
-    # Ej.: {"lunes": "1", "martes": "1/2", ..., "domingo": ""}
+   
     horarioSemanal = models.JSONField()
     periodicidad = models.CharField(max_length=50, default='semanal')
     proximoControl = models.DateField(null=True, blank=True)
@@ -67,14 +67,14 @@ class RegistroToma(models.Model):
 
 
 class RegistroINR(models.Model):
-    # Un usuario tiene muchas lecturas de INR (One-to-Many)
+ 
     usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='registros_inr')
     valorINR = models.FloatField()
     rangoTerapeuticoMin = models.FloatField()
     rangoTerapeuticoMax = models.FloatField()
-    # La app NO interpreta resultados clínicos: siempre queda "sin_evaluar".
+    
     estadoAlerta = models.CharField(max_length=20, default='sin_evaluar')
-    fechaLectura = models.DateTimeField(auto_now_add=True)
+    fechaLectura = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ['-fechaLectura', '-id']
