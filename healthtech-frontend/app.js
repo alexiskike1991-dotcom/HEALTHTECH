@@ -1,10 +1,12 @@
-
+// HealthTech TACO — conectado al backend de Django/DRF (Natt39/HEALTHTECH)
+// API_BASE_URL ya viene declarada en config.js (no la repetimos aquí para no romper la página)
 const API = `${String(API_BASE_URL).trim().replace(/\/+$/, '')}/api/v1`;
 const $ = id => document.getElementById(id);
 let accessToken = localStorage.getItem('taco_access') || null;
 let refreshToken = localStorage.getItem('taco_refresh') || null;
 let idUsuario = localStorage.getItem('taco_id') || null;
 let listaMedicamentosActual = [];
+let fichaCarga = { med: false, inr: false, totalINR: 0 };
 const COLOR_ESTADO = { verde: '#16a34a', amarillo: '#f59e0b', rojo: '#dc2626' };
 let medicamentoEnAlerta = null;
 let intervaloAlertas = null;
@@ -16,7 +18,7 @@ const formLogin = $('formLogin');
 const formRegistro = $('formRegistro');
 const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
-
+// ---------------------------------------------------------------- Conexión con la API (Django)
 async function fetchAPI(path, options = {}, _reintentando) {
   const headers = Object.assign({}, options.headers || {});
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
@@ -134,7 +136,7 @@ function pintarBarrasINR(registros) {
   });
 }
 
-
+// ---------------------------------------------------------------- Ficha médica, "Hoy" y accesibilidad
 function limpiarMedico(texto) {
   if (!texto) return '';
   let t = String(texto).replace(/\b\d{1,2}\.?\d{3}\.?\d{3}-[\dkK]\b/g, '').replace(/\s{2,}/g, ' ').replace(/\s+,/g, ',').trim().replace(/^,|,$/g, '').trim();
@@ -152,6 +154,14 @@ function pastillasSVG(n) {
     out += `<svg width="38" height="38" viewBox="0 0 34 34" aria-hidden="true">${base}<path d="M${c},${c} L${c},${c - R} A${R},${R} 0 ${grande} 1 ${x.toFixed(2)},${y.toFixed(2)} Z" fill="#00CC9F"/></svg>`;
   }
   return out;
+}
+
+function limpiarFicha() {
+  ['taco_medico', 'taco_ultimo_control', 'taco_diagnosticos'].forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+  pintarFicha();
+}
+function verificarFicha() {
+  if (fichaCarga.med && fichaCarga.inr && !listaMedicamentosActual.length && fichaCarga.totalINR === 0) limpiarFicha();
 }
 function pintarFicha() {
   if (!$('fichaMedica')) return;
@@ -219,6 +229,7 @@ function contadorMedicamentos() {
 }
 function reiniciarResumen() {
   listaMedicamentosActual = [];
+  fichaCarga = { med: false, inr: false, totalINR: 0 };
   contadorMedicamentos();
   if ($('listaMedicamentos')) $('listaMedicamentos').innerHTML = '<li>Cargando medicamentos...</li>';
   if ($('listaHistorial')) $('listaHistorial').innerHTML = '<li>Cargando historial...</li>';
@@ -752,6 +763,7 @@ $('btnSalir')?.addEventListener('click', async () => {
   localStorage.removeItem('taco_access'); localStorage.removeItem('taco_refresh');
   localStorage.removeItem('taco_id'); localStorage.removeItem('taco_nombre');
   accessToken = null; refreshToken = null; idUsuario = null; listaMedicamentosActual = [];
+  fichaCarga = { med: false, inr: false, totalINR: 0 }; limpiarFicha();
   contadorMedicamentos(); nombreEnPantalla('Paciente'); pintarReporte([]); mostrarAuth();
 });
 
@@ -998,6 +1010,7 @@ async function cargarMedicamentos() {
     const datos = await fetchAPI('/medicamentos/?page_size=100&ordering=nombre');
     if (sesionAlSolicitar !== sesion || tokenAlSolicitar !== accessToken) return;
     listaMedicamentosActual = Array.isArray(datos.data?.results) ? datos.data.results : [];
+    fichaCarga.med = true; verificarFicha();
     contadorMedicamentos();
     dibujarCalendario();
     if ($('indicadorAdherenciaValor')) $('indicadorAdherenciaValor').textContent = calcularAdherenciaGeneral();
@@ -1071,6 +1084,7 @@ async function cargarHistorial() {
     const datos = await fetchAPI('/registros-inr/?page_size=100');
     if (sesionAlSolicitar !== sesion || tokenAlSolicitar !== accessToken) return;
     const registros = Array.isArray(datos.data?.results) ? datos.data.results : [];
+    fichaCarga.inr = true; fichaCarga.totalINR = registros.length; verificarFicha();
     pintarReporte(registros);
     pintarEstadisticas(registros);
     if (!registros.length) { lista.innerHTML = '<li>No hay registros INR guardados.</li>'; return; }
@@ -1222,31 +1236,34 @@ function reproducirIntro(alTerminar) {
   let terminado = false;
   let respaldo = null;
   const terminar = function () {
-    if (terminado) return;         
+    if (terminado) return;          // evita ejecutarse dos veces
     terminado = true;
     clearTimeout(respaldo);
     video.removeEventListener('ended', terminar);
     video.pause();
       document.body.classList.remove('intro-activa');
     splash.classList.add('hidden');
-    if (alTerminar) alTerminar();   
+    if (alTerminar) alTerminar();   // recién aquí se muestra el panel del paciente
   };
 
-  video.addEventListener('ended', terminar);   
+  video.addEventListener('ended', terminar);   // se cierra cuando el video TERMINA, no por tiempo fijo
     document.body.classList.add('intro-activa');
   splash.classList.remove('hidden');
   video.currentTime = 0;
   video.muted = true;
   video.play().catch(function (e) {
     console.warn('No se pudo reproducir la intro:', e);
-    terminar();                     
+    terminar();                     // si el navegador la bloquea, no dejamos al usuario atrapado
   });
 
-  
+  // Respaldo de seguridad: duración real del video + 3 segundos
   const duracion = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 8;
   respaldo = setTimeout(terminar, (duracion + 3) * 1000);
 }
-
+// ---------------------------------------------------------------------------
+// Pantalla de acceso: cambio entre "Iniciar sesión" y "Crear cuenta" (tarjeta que gira),
+// ojo de la contraseña y botones secundarios. Sin esto, "Crear cuenta" no hace nada.
+// ---------------------------------------------------------------------------
 (function () {
   const tarjeta = $('flipCard');
   const caraLogin = $('caraLogin');
@@ -1255,11 +1272,11 @@ function reproducirIntro(alTerminar) {
 
   function mostrarCara(registro) {
     if (!tarjeta || !caraLogin || !caraRegistro) return;
-    tarjeta.classList.add('is-animating');             
+    tarjeta.classList.add('is-animating');             // mantiene visibles ambas caras durante el giro
     tarjeta.classList.toggle('is-flipped', registro);
     caraLogin.setAttribute('aria-hidden', String(registro));
     caraRegistro.setAttribute('aria-hidden', String(!registro));
-    caraLogin.inert = registro;                         
+    caraLogin.inert = registro;                         // la cara oculta no recibe foco ni clics
     caraRegistro.inert = !registro;
     ['mensajeAuth', 'mensajeRegistro'].forEach(id => { if ($(id)) $(id).textContent = ''; });
     clearTimeout(temporizador);
@@ -1273,7 +1290,7 @@ function reproducirIntro(alTerminar) {
   $('tabRegistro')?.addEventListener('click', () => mostrarCara(true));
   $('tabLogin')?.addEventListener('click', () => mostrarCara(false));
 
-  
+  // Ojo: mostrar / ocultar contraseña
   document.querySelectorAll('.toggle-eye').forEach(boton => {
     boton.addEventListener('click', () => {
       const campo = $(boton.dataset.target);
@@ -1284,7 +1301,7 @@ function reproducirIntro(alTerminar) {
     });
   });
 
-  
+  // Funciones que el backend aún no ofrece: se avisa en lugar de dejar el botón "muerto"
   $('linkOlvideContrasena')?.addEventListener('click', e => {
     e.preventDefault();
     if ($('mensajeAuth')) $('mensajeAuth').textContent = 'La recuperación de contraseña aún no está disponible. Contacta al administrador.';
