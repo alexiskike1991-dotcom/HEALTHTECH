@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HealthTech TACO · Vista del cuidador</title>
+<script src="config.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f1f5f9;color:#0f172a;font-size:19px;line-height:1.4}
+header{background:#14532d;color:#fff;padding:18px 16px}
+header h1{margin:0;font-size:1.4rem}
+header p{margin:4px 0 0;opacity:.9;font-size:1rem}
+main{max-width:720px;margin:0 auto;padding:14px}
+.card{background:#fff;border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.card h2{margin:0 0 10px;font-size:1.25rem}
+.grande{font-size:3.2rem;font-weight:800;line-height:1}
+.pill{display:inline-block;padding:6px 18px;border-radius:999px;color:#fff;font-weight:800;font-size:1.15rem;margin-left:10px;vertical-align:middle}
+.muted{color:#475569;font-size:1rem}
+.fila{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #e2e8f0}
+.fila:last-child{border-bottom:0}
+.fila b{text-align:right}
+.barras{display:flex;align-items:flex-end;gap:6px;height:110px;margin-top:12px}
+.barras div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;font-size:.8rem}
+.barras i{display:block;width:100%;border-radius:6px 6px 0 0}
+.fechas{display:flex;gap:6px;font-size:.72rem;color:#475569}
+.fechas span{flex:1;text-align:center}
+.ok{color:#15803d;font-weight:700}.pend{color:#b45309;font-weight:700}
+.aviso{background:#fef9c3;border-radius:12px;padding:10px 14px;font-size:.95rem;margin-bottom:14px}
+.error{background:#fee2e2;color:#7f1d1d;border-radius:12px;padding:18px;font-size:1.1rem}
+ul{margin:0;padding-left:22px}
+</style>
+</head>
+<body>
+<header><h1 id="titulo">Ficha del paciente</h1><p>Vista del cuidador · solo lectura</p></header>
+<main id="contenido"><div class="card">Cargando… la primera vez puede tardar hasta 1 minuto.</div></main>
+<script>
+(function () {
+  const API = String(API_BASE_URL).trim().replace(/\/+$/, '') + '/api/v1';
+  const COLOR = { verde: '#16a34a', amarillo: '#f59e0b', rojo: '#dc2626' };
+  const DIAS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
+  const main = document.getElementById('contenido');
+  const token = new URLSearchParams(location.search).get('t') || '';
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; };
+  const num = v => { const n = parseFloat(v); return isFinite(n) ? n : null; };
+  const fecha = iso => { const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }); };
+  const fechaCorta = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' }); };
+  const soloFecha = s => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); return m ? `${m[3]}/${m[2]}/${m[1]}` : 'No registrado'; };
+  function clasificar(r) {
+    const v = num(r.valor), a = num(r.min), b = num(r.max);
+    if (v === null) return null;
+    if (a === null || b === null) return 'verde';
+    if (v >= a && v <= b) return 'verde';
+    const m = Math.max((b - a) * 0.2, 0.3);
+    return (v >= a - m && v <= b + m) ? 'amarillo' : 'rojo';
+  }
+  function fila(k, v) { const f = el('div', 'fila'); f.append(el('span', '', k), el('b', '', v)); return f; }
+  function tarjeta(titulo) { const c = el('section', 'card'); c.append(el('h2', '', titulo)); return c; }
+
+  function pintar(d) {
+    main.replaceChildren();
+    document.getElementById('titulo').textContent = 'Ficha de ' + (d.paciente || 'el paciente');
+    const ultimo = d.inr[0];
+
+    const c1 = tarjeta('Último INR');
+    if (!ultimo) c1.append(el('p', 'muted', 'Aún no hay lecturas guardadas.'));
+    else {
+      const est = clasificar(ultimo), v = num(ultimo.valor), a = num(ultimo.min), b = num(ultimo.max);
+      const linea = el('div'); linea.append(el('span', 'grande', String(ultimo.valor)));
+      let txt = 'EN RANGO'; if (a !== null && v < a) txt = 'BAJO'; else if (b !== null && v > b) txt = 'ALTO';
+      const p = el('span', 'pill', txt); p.style.background = COLOR[est] || '#16a34a'; linea.append(p);
+      c1.append(linea, el('p', 'muted', `Rango del paciente: ${ultimo.min} a ${ultimo.max} · medido el ${fecha(ultimo.fecha)}`));
+      if (est === 'rojo') { const al = el('div', 'error', 'El INR está fuera del rango. Avise al médico o al policlínico hoy.'); al.style.marginTop = '10px'; c1.append(al); }
+      const ult = d.inr.slice(0, 8).reverse(); const max = Math.max(...ult.map(r => num(r.valor) || 0), 1);
+      const bar = el('div', 'barras'), fe = el('div', 'fechas');
+      ult.forEach(r => {
+        const col = el('div'); col.append(el('b', '', String(r.valor)));
+        const i = el('i'); i.style.height = Math.max(6, (num(r.valor) || 0) / max * 70) + 'px'; i.style.background = COLOR[clasificar(r)] || '#16a34a'; col.append(i);
+        bar.append(col); fe.append(el('span', '', fechaCorta(r.fecha)));
+      });
+      c1.append(bar, fe);
+    }
+    main.append(c1);
+
+    const diaHoy = DIAS[(new Date().getDay() + 6) % 7];
+    const c2 = tarjeta('Medicamentos de hoy');
+    const hoy = (d.medicamentos || []).filter(m => { const x = (m.horarioSemanal || {})[diaHoy]; return x && x !== '0'; });
+    if (!d.medicamentos.length) c2.append(el('p', 'muted', 'Sin medicamentos registrados.'));
+    else if (!hoy.length) c2.append(el('p', 'muted', 'Hoy no le corresponde ningún medicamento.'));
+    hoy.forEach(m => {
+      const f = el('div', 'fila'); const l = el('div');
+      l.append(el('strong', '', m.nombre), el('div', 'muted', `Dosis: ${m.horarioSemanal[diaHoy]} · Hora: ${m.hora || '—'}`));
+      f.append(l, el('span', m.tomadaHoy ? 'ok' : 'pend', m.tomadaHoy ? '✓ Tomado' : 'Pendiente'));
+      c2.append(f);
+    });
+    main.append(c2);
+
+    const fi = d.ficha || {};
+    const c3 = tarjeta('Ficha médica');
+    c3.append(fila('Médico tratante', fi.medico || 'No registrado'), fila('Último control', soloFecha(fi.ultimoControl)), fila('Próximo control', soloFecha(fi.proximoControl)));
+    const dg = el('div'); dg.style.paddingTop = '8px'; dg.append(el('strong', '', 'Diagnósticos'));
+    const ul = el('ul'); ((fi.diagnosticos && fi.diagnosticos.length) ? fi.diagnosticos : ['No registrados']).forEach(x => ul.append(el('li', '', x)));
+    dg.append(ul); c3.append(dg); main.append(c3);
+
+    if (d.inr.length > 1) {
+      const c4 = tarjeta('Historial de INR');
+      d.inr.slice(0, 15).forEach(r => { const f = fila(fecha(r.fecha), String(r.valor)); f.lastChild.style.color = COLOR[clasificar(r)] || '#16a34a'; c4.append(f); });
+      main.append(c4);
+    }
+    main.append(el('div', 'aviso', 'Esta página es solo informativa y no reemplaza la indicación de un profesional de la salud. Se actualiza sola cada minuto.'));
+  }
+
+  async function cargar() {
+    if (!token) { main.replaceChildren(el('div', 'error', 'Falta el código del paciente. Escanee de nuevo el código QR.')); return; }
+    try {
+      const res = await fetch(`${API}/cuidador/ver/${encodeURIComponent(token)}/`);
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error((j.error && j.error.message) || 'No se pudo cargar la ficha.');
+      pintar(j.data);
+    } catch (e) {
+      if (!main.querySelector('.card h2')) main.replaceChildren(el('div', 'error', e.message || 'No se pudo conectar. Reintente en unos segundos.'));
+    }
+  }
+  cargar(); setInterval(cargar, 60000);
+})();
+</script>
+</body>
+</html>
