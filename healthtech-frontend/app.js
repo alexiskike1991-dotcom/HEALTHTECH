@@ -1143,7 +1143,9 @@ async function mostrarQRCuidador(nuevo, silencioso) {
   try {
     await sincronizarFichaCuidador(true);
     const r = await fetchAPI('/cuidador/enlace/', { method: nuevo ? 'POST' : 'GET' });
-    dibujarQR(r.token);
+    const tk = r && r.data && r.data.token;
+    if (!tk) throw new Error('No se recibió el código del QR.');
+    dibujarQR(tk);
   } catch (e) { if (!silencioso) alert(e.message || 'No se pudo generar el QR.'); }
   finally { if (btn) btn.disabled = false; }
 }
