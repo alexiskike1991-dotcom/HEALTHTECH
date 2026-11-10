@@ -1,12 +1,13 @@
 from django.contrib import admin
 
-from .models import Medicamento, PerfilUsuario, RegistroINR, RegistroToma
+from .models import EnlaceCuidador, Medicamento, PerfilUsuario, RegistroINR, RegistroToma
 
 
 @admin.register(PerfilUsuario)
 class PerfilUsuarioAdmin(admin.ModelAdmin):
     list_display = ('usuario', 'rol', 'creado')
     list_filter = ('rol',)
+    list_editable = ('rol',)  # el super usuario cambia el rol (Paciente / Enfermero) desde la lista
     search_fields = ('usuario__username', 'usuario__first_name')
 
 
@@ -25,3 +26,9 @@ class RegistroTomaAdmin(admin.ModelAdmin):
 @admin.register(RegistroINR)
 class RegistroINRAdmin(admin.ModelAdmin):
     list_display = ('usuario', 'valorINR', 'estadoAlerta', 'fechaLectura')
+
+
+@admin.register(EnlaceCuidador)
+class EnlaceCuidadorAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'creado')
+    readonly_fields = ('token',)

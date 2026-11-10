@@ -30,8 +30,8 @@ class IsMedico(BasePermission):
 
 class IsOwnerOrMedicoReadOnly(BasePermission):
     """
-    - Dueño del recurso: acceso completo.
-    - Médico: solo lectura sobre recursos de sus pacientes.
+    - Paciente (dueño): ve, crea y confirma tomas; no edita ni borra (lo hace el super usuario).
+    - Enfermero (rol interno 'medico'): lee todo y puede eliminar duplicados; no edita.
     - Administrador: acceso completo.
     - Cualquier otro caso: 403.
     """
@@ -42,6 +42,10 @@ class IsOwnerOrMedicoReadOnly(BasePermission):
 
     def has_object_permission(self, request, view, obj):
         user = request.user
-        if es_admin(user) or obj.propietario.pk == user.pk:
+        if es_admin(user):
             return True
-        return es_medico(user) and request.method in SAFE_METHODS
+        if obj.propietario.pk == user.pk:
+            # Paciente: puede ver y confirmar tomas, pero NO modificar ni borrar lo guardado.
+            return request.method not in ('PUT', 'PATCH', 'DELETE')
+        # Enfermero: ve todo y puede ELIMINAR registros repetidos/anteriores; no puede editar (PUT/PATCH).
+        return es_medico(user) and (request.method in SAFE_METHODS or request.method == 'DELETE')

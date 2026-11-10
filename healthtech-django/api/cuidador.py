@@ -1,11 +1,19 @@
 """Vista de cuidador: enlace permanente (QR) de SOLO LECTURA a la ficha del paciente."""
 from django.utils import timezone
+from rest_framework.exceptions import APIException
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from .models import EnlaceCuidador, Medicamento, RegistroINR
+
+
+class EnlaceInvalido(APIException):
+    status_code = 404
+    default_detail = 'Este código QR ya no es válido. Pide uno nuevo al paciente.'
+    default_code = 'enlace_invalido'
+    usar_detalle = True
 
 
 def _texto(v, largo=120):
@@ -65,8 +73,7 @@ class VerCuidadorView(APIView):
         try:
             enlace = EnlaceCuidador.objects.select_related('usuario').get(token=token)
         except EnlaceCuidador.DoesNotExist:
-            from rest_framework.exceptions import NotFound
-            raise NotFound('Este código QR ya no es válido. Pide uno nuevo al paciente.')
+            raise EnlaceInvalido()
         u = enlace.usuario
         hoy = timezone.localdate()
         inr = RegistroINR.objects.filter(usuario=u).order_by('-fechaLectura', '-id')[:30]

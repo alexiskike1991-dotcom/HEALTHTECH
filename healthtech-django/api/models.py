@@ -10,7 +10,7 @@ class PerfilUsuario(models.Model):
 
     class Rol(models.TextChoices):
         PACIENTE = 'paciente', 'Paciente'
-        MEDICO = 'medico', 'Médico'
+        MEDICO = 'medico', 'Enfermero/a'
 
     usuario = models.OneToOneField(User, on_delete=models.CASCADE, related_name='perfil')
     rol = models.CharField(max_length=20, choices=Rol.choices, default=Rol.PACIENTE)
@@ -21,12 +21,12 @@ class PerfilUsuario(models.Model):
 
 
 class Medicamento(models.Model):
-    
+    # Un usuario tiene muchos medicamentos (One-to-Many)
     usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='medicamentos')
     nombre = models.CharField(max_length=100)
     unidadPastilla = models.CharField(max_length=100)
     horaProgramada = models.TimeField()
-    
+    # Ej.: {"lunes": "1", "martes": "1/2", ..., "domingo": ""}
     horarioSemanal = models.JSONField()
     periodicidad = models.CharField(max_length=50, default='semanal')
     proximoControl = models.DateField(null=True, blank=True)
@@ -69,12 +69,12 @@ class RegistroToma(models.Model):
 
 
 class RegistroINR(models.Model):
-    
+    # Un usuario tiene muchas lecturas de INR (One-to-Many)
     usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='registros_inr')
     valorINR = models.FloatField()
     rangoTerapeuticoMin = models.FloatField()
     rangoTerapeuticoMax = models.FloatField()
-    
+    # La app NO interpreta resultados clínicos: siempre queda "sin_evaluar".
     estadoAlerta = models.CharField(max_length=20, default='sin_evaluar')
     fechaLectura = models.DateTimeField(default=timezone.now)
 
@@ -98,7 +98,7 @@ class EnlaceCuidador(models.Model):
 
     usuario = models.OneToOneField(User, on_delete=models.CASCADE, related_name='enlace_cuidador')
     token = models.CharField(max_length=64, unique=True, default=_nuevo_token, db_index=True)
-    
+    # Datos que solo existen en el navegador del paciente (médico, diagnósticos, controles).
     ficha = models.JSONField(default=dict, blank=True)
     creado = models.DateTimeField(auto_now_add=True)
 
