@@ -11,6 +11,8 @@ const COLOR_ESTADO = { verde: '#16a34a', amarillo: '#f59e0b', rojo: '#dc2626' };
 let medicamentoEnAlerta = null;
 let intervaloAlertas = null;
 let sesion = 0;
+let staffDatos = [];
+let staffRol = 'medico';
 let fichaEnviada = '';
 let temporizadorFicha = null;
 let mesCalendario = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -229,6 +231,20 @@ function contadorMedicamentos() {
   if ($('totalMedicamentos')) $('totalMedicamentos').textContent = String(cantidad);
   if ($('totalMedicamentosResumen')) $('totalMedicamentosResumen').textContent = String(cantidad);
   pintarBarrasPlan();
+  pintarTratamientoHistorial();
+}
+function pintarTratamientoHistorial() {
+  const cont = $('tratamientoHistorial'); if (!cont) return;
+  cont.replaceChildren();
+  const meds = listaMedicamentosActual || [];
+  const t = document.createElement('h3'); t.textContent = 'Tratamiento actual'; cont.append(t);
+  if (!meds.length) { const p = document.createElement('p'); p.textContent = 'Aún no hay tratamiento registrado.'; cont.append(p); return; }
+  meds.forEach(m => {
+    const d = document.createElement('div'); d.className = 'th-med';
+    const n = document.createElement('strong'); n.textContent = m.nombre; d.append(n);
+    [`Hora de toma: ${String(m.horaProgramada || '').slice(0, 5) || '—'}`, `Dosis por día: ${diasSemanaResumen(m.horarioSemanal)}`].forEach(x => { const p = document.createElement('p'); p.textContent = x; d.append(p); });
+    cont.append(d);
+  });
 }
 function reiniciarResumen() {
   listaMedicamentosActual = [];
@@ -241,9 +257,22 @@ function reiniciarResumen() {
   pintarEstadisticas([]);
   dibujarCalendario();
 }
-function mostrarPanel() {
+async function mostrarPanel() {
+  if (!localStorage.getItem('taco_rol') && accessToken) {
+    try { const p = await fetchAPI('/auth/perfil/'); localStorage.setItem('taco_rol', (p.data && p.data.rol) || 'paciente'); } catch (e) { /* si falla, se trata como paciente */ }
+  }
+  const rol = localStorage.getItem('taco_rol') || 'paciente';
   sesion++;
   vistaAuth?.classList.add('hidden');
+  if (rol === 'admin' || rol === 'medico') {
+    vistaPanel?.classList.add('hidden');
+    document.body.classList.remove('rol-paciente');
+    $('vistaStaff')?.classList.remove('hidden');
+    iniciarStaff(rol);
+    return;
+  }
+  $('vistaStaff')?.classList.add('hidden');
+  document.body.classList.add('rol-paciente');
   vistaPanel?.classList.remove('hidden');
   nombreEnPantalla(localStorage.getItem('taco_nombre'));
   reiniciarResumen();
@@ -258,6 +287,8 @@ function mostrarPanel() {
 function mostrarAuth() {
   sesion++;
   vistaPanel?.classList.add('hidden');
+  $('vistaStaff')?.classList.add('hidden');
+  document.body.classList.remove('rol-paciente');
   vistaAuth?.classList.remove('hidden');
   $('alertaPastilla')?.classList.add('hidden');
   medicamentoEnAlerta = null;
@@ -750,6 +781,7 @@ formLogin?.addEventListener('submit', async e => {
     localStorage.setItem('taco_refresh', refreshToken || '');
     localStorage.setItem('taco_id', String(idUsuario));
     localStorage.setItem('taco_nombre', info.usuario.nombre ?? 'Paciente');
+    localStorage.setItem('taco_rol', info.usuario.rol || 'paciente');
     reproducirIntro(function () { mostrarPanel(); });
   } catch (error) {
     console.error('Error al iniciar sesión:', error);
@@ -776,16 +808,18 @@ formRegistro?.addEventListener('submit', async e => {
     if (mensaje) mensaje.textContent = error.message || 'No se puede conectar con el servidor. Revisa que esté encendido.';
   }
 });
-$('btnSalir')?.addEventListener('click', async () => {
+async function cerrarSesion() {
   try {
     if (refreshToken) await fetchAPI('/auth/logout/', { method: 'POST', body: JSON.stringify({ refresh: refreshToken }) });
   } catch { /* no bloquea el cierre de sesión local */ }
   localStorage.removeItem('taco_access'); localStorage.removeItem('taco_refresh');
-  localStorage.removeItem('taco_id'); localStorage.removeItem('taco_nombre');
+  localStorage.removeItem('taco_id'); localStorage.removeItem('taco_nombre'); localStorage.removeItem('taco_rol');
   accessToken = null; refreshToken = null; idUsuario = null; listaMedicamentosActual = [];
   fichaCarga = { med: false, inr: false, totalINR: 0 }; limpiarFicha();
   limpiarQR(); contadorMedicamentos(); nombreEnPantalla('Paciente'); pintarReporte([]); mostrarAuth();
-});
+}
+$('btnSalir')?.addEventListener('click', cerrarSesion);
+$('btnSalirStaff')?.addEventListener('click', cerrarSesion);
 
 // ---------------------------------------------------------------- Escáner de recetas (IA de Gemini vía Django)
 function crearPopupReceta() {
@@ -797,7 +831,7 @@ function crearPopupReceta() {
     <div style="background:#fff;border-radius:12px;padding:24px;max-width:460px;width:100%;max-height:85vh;overflow-y:auto;color:#111;">
       <h3 style="margin-top:0">Revisa los datos antes de guardar</h3>
       <div id="popupRecetaContenido" style="font-size:14px;line-height:1.6"></div>
-      <p style="font-size:12px;color:#555;margin-top:12px">Compara estos datos con la hoja original antes de aceptar. La hora de toma y el gramaje no los lee la IA: compruébalos y complétalos tú.</p>
+      <p style="font-size:12px;color:#555;margin-top:12px">Compara estos datos con la hoja original antes de aceptar. Los datos se guardan tal como están en la hoja. La hora de toma no la lee la IA: compruébala.</p>
       <div style="display:flex;gap:10px;margin-top:16px">
         <button id="popupRecetaCancelar" type="button" style="flex:1;padding:10px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:14px">Cancelar</button>
         <button id="popupRecetaAceptar" type="button" style="flex:1;padding:10px;border-radius:8px;border:none;background:#16a34a;color:#fff;cursor:pointer;font-size:14px">Aceptar y guardar</button>
@@ -855,6 +889,11 @@ function diagnosticosLista(datos) {
 function leerDiagnosticosGuardados() {
   try { const v = JSON.parse(localStorage.getItem('taco_diagnosticos') || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; }
 }
+// La unidad se toma de lo escrito en la receta (ej: "ACENOCUMAROL 4.00mg" -> "4.00mg"); no se pide al usuario.
+function unidadDesdeNombre(nombre) {
+  const m = String(nombre || '').match(/\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ml)\b/i);
+  return m ? m[0].replace(/\s+/g, '') : 'No indicada';
+}
 function mostrarPopupReceta(datosExtraidos) {
   return new Promise(resolve => {
     const overlay = crearPopupReceta();
@@ -877,9 +916,6 @@ function mostrarPopupReceta(datosExtraidos) {
           <label style="display:block;font-size:13px;margin-top:6px">Hora de toma
             <input type="time" id="recetaHora-${i}" value="08:00" style="display:block;width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;margin-top:3px">
           </label>
-          <label style="display:block;font-size:13px;margin-top:8px">Unidad / gramaje (ej: Comprimido de 4mg)
-            <input type="text" id="recetaUnidad-${i}" placeholder="Comprimido de 4mg" style="display:block;width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;margin-top:3px">
-          </label>
           <p style="margin-top:8px"><strong>Dosis por día detectadas:</strong></p>
           <ul style="margin:4px 0 0 18px;padding:0">${diasSemanaTexto(med.dosis_diaria)}</ul>
         </div>
@@ -891,7 +927,7 @@ function mostrarPopupReceta(datosExtraidos) {
     $('popupRecetaAceptar').onclick = () => {
       const medicamentosConfirmados = medicamentos.map((med, i) => ({
         nombre: med.nombre || 'Medicamento',
-        unidadPastilla: $(`recetaUnidad-${i}`)?.value.trim() || 'No indicada',
+        unidadPastilla: unidadDesdeNombre(med.nombre),
         horaProgramada: $(`recetaHora-${i}`)?.value || '08:00',
         horarioSemanal: DIAS_SEMANA.reduce((acc, dia) => { acc[dia] = (med.dosis_diaria?.[dia]) || ''; return acc; }, {}),
         proximoControl: fechaControlValida(datosExtraidos.fecha_control)
@@ -963,7 +999,7 @@ $('formReceta')?.addEventListener('submit', async e => {
         const cambios = { ...med };
         if (!cambios.proximoControl) delete cambios.proximoControl;
         if (cambios.unidadPastilla === 'No indicada' && existente.unidadPastilla) delete cambios.unidadPastilla;
-        await fetchAPI(`/medicamentos/${existente.id}/`, { method: 'PATCH', body: JSON.stringify(cambios) });
+        // El paciente no modifica lo ya guardado (lo hace el super usuario): se conserva el registro existente.
       } else {
         await fetchAPI('/medicamentos/', { method: 'POST', body: JSON.stringify(med) });
       }
@@ -1182,6 +1218,150 @@ async function sincronizarFichaCuidador(forzar) {
   try { await fetchAPI('/cuidador/ficha/', { method: 'PUT', body: firma }); fichaEnviada = firma; } catch (e) { /* se reintenta en el próximo cambio */ }
 }
 function programarSyncFicha() { clearTimeout(temporizadorFicha); temporizadorFicha = setTimeout(() => sincronizarFichaCuidador(false), 2000); }
+
+// ---------------------------------------------------------------- Modo de ingreso: IA o escrito
+function aplicarModoIngreso(modo) {
+  const ia = modo !== 'manual';
+  $('herramientaReceta')?.classList.toggle('hidden', !ia);
+  $('herramientaMedicamentos')?.classList.toggle('hidden', ia);
+  $('btnModoIA')?.classList.toggle('activo', ia); $('btnModoIA')?.setAttribute('aria-pressed', String(ia));
+  $('btnModoManual')?.classList.toggle('activo', !ia); $('btnModoManual')?.setAttribute('aria-pressed', String(!ia));
+  try { localStorage.setItem('taco_modo', ia ? 'ia' : 'manual'); } catch (e) { /* opcional */ }
+}
+$('btnModoIA')?.addEventListener('click', () => aplicarModoIngreso('ia'));
+$('btnModoManual')?.addEventListener('click', () => aplicarModoIngreso('manual'));
+document.querySelector('a[href="#herramientaMedicamentos"]')?.addEventListener('click', e => {
+  e.preventDefault(); aplicarModoIngreso('manual'); $('herramientaMedicamentos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+(function () { let m = 'ia'; try { m = localStorage.getItem('taco_modo') || 'ia'; } catch (e) { /* opcional */ } aplicarModoIngreso(m); })();
+
+// ---------------------------------------------------------------- Perfiles Enfermero y Super usuario
+function elem(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt !== undefined) e.textContent = txt; return e; }
+function fechaHoraCorta(iso) { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+
+async function iniciarStaff(rol) {
+  staffRol = rol;
+  const admin = rol === 'admin';
+  if ($('staffNombre')) $('staffNombre').textContent = localStorage.getItem('taco_nombre') || 'Usuario';
+  if ($('staffRolEtiqueta')) $('staffRolEtiqueta').textContent = admin ? 'Super usuario' : 'Enfermería';
+  if ($('staffTitulo')) $('staffTitulo').textContent = admin ? 'Panel del super usuario' : 'Panel de enfermería';
+  if ($('staffSubtitulo')) $('staffSubtitulo').textContent = admin ? 'Puedes ver y modificar todo, y asignar roles.' : 'Ves las pastillas y horarios de cada paciente y puedes eliminar recetas repetidas o antiguas.';
+  $('staffAdmin')?.classList.toggle('hidden', !admin);
+  const vs = $('vistaStaff'); if (vs) { vs.classList.toggle('es-admin', admin); vs.classList.toggle('es-enfermero', !admin); }
+  if ($('staffBanner')) $('staffBanner').textContent = admin ? '👑 PERFIL SUPER USUARIO · ADMINISTRADOR (puede modificar todo)' : '🩺 PERFIL ENFERMERO/A · VE TRATAMIENTOS Y ELIMINA DUPLICADOS (no edita)';
+  const link = $('linkAdminDjango'); if (link) link.href = `${String(API_BASE_URL).trim().replace(/\/+$/, '')}/admin/`;
+  await cargarStaff();
+  if (admin) await cargarRolesStaff();
+}
+async function cargarStaff() {
+  const cont = $('staffLista'); if (!cont) return;
+  cont.textContent = 'Cargando pacientes… (la primera vez puede tardar hasta 1 minuto)';
+  try {
+    const r = await fetchAPI('/staff/pacientes/');
+    staffDatos = (r.data && r.data.pacientes) || [];
+    pintarStaff();
+  } catch (e) { cont.textContent = e.message || 'No se pudo cargar la lista de pacientes.'; }
+}
+function pintarStaff() {
+  const cont = $('staffLista'); if (!cont) return;
+  const q = ($('staffBuscar')?.value || '').trim().toLowerCase();
+  const lista = staffDatos.filter(p => !q || `${p.nombre} ${p.email}`.toLowerCase().includes(q));
+  cont.replaceChildren();
+  if (!lista.length) { cont.append(elem('p', 'muted', staffDatos.length ? 'Ningún paciente coincide con la búsqueda.' : 'Aún no hay pacientes registrados.')); return; }
+  const admin = staffRol === 'admin';
+  lista.forEach(p => {
+    const card = elem('article', 'staff-paciente');
+    card.append(elem('h3', '', p.nombre), elem('p', 'sub', p.email || ''));
+    if (p.ultimoINR) {
+      const i = p.ultimoINR;
+      card.append(elem('p', '', `Último INR: ${i.valor} (rango ${i.min} a ${i.max}) · ${fechaHoraCorta(i.fecha).split(',')[0]}`));
+    } else card.append(elem('p', 'muted', 'Sin lecturas de INR.'));
+    if (!p.medicamentos.length) card.append(elem('p', 'muted', 'Sin medicamentos registrados.'));
+    const dupMed = new Set();
+    p.medicamentos.forEach((m, i) => { for (let k = 0; k < i; k++) if (nombreParecido(p.medicamentos[k].nombre, m.nombre)) dupMed.add(m.id); });
+    p.medicamentos.forEach(m => {
+      const fila = elem('div', 'staff-med');
+      const linea = elem('div', 'linea');
+      const dosis = dosisDeHoy(m.horarioSemanal);
+      const corresponde = dosis && dosis !== '0';
+      const izq = elem('div'); const tit = elem('strong', '', `${m.nombre} ${m.unidad || ''}`.trim()); izq.append(tit); if (dupMed.has(m.id)) izq.append(elem('span', 'staff-dup', 'POSIBLE DUPLICADO')); izq.append( elem('div', 'muted', corresponde ? `Dosis de hoy: ${dosis}` : 'Hoy no le corresponde'));
+      const der = elem('div'); der.append(elem('span', 'staff-hora', `🕒 ${m.hora || '—'}`), document.createTextNode('  '));
+      if (corresponde) der.append(elem('span', m.tomadaHoy ? 'staff-ok' : 'staff-pend', m.tomadaHoy ? '✓ Tomado hoy' : 'Pendiente hoy'));
+      linea.append(izq, der); fila.append(linea);
+      if (m.tomas && m.tomas.length) {
+        const ul = elem('ul', 'staff-tomas');
+        m.tomas.forEach(t => ul.append(elem('li', '', `${fechaHoraCorta(t.fecha)} — ${t.estado === 'tomada' ? 'tomada' : 'omitida'}${t.dosis ? ` (dosis ${t.dosis})` : ''}`)));
+        fila.append(ul);
+      }
+      const ac = elem('div', 'staff-acciones');
+      if (admin) { const bh = elem('button', '', 'Cambiar hora'); bh.type = 'button'; bh.dataset.staffHora = m.id; bh.dataset.actual = m.hora || ''; ac.append(bh); }
+      const be = elem('button', 'peligro', 'Eliminar medicamento'); be.type = 'button'; be.dataset.staffEliminar = m.id; be.dataset.nombre = m.nombre; ac.append(be);
+      fila.append(ac);
+      card.append(fila);
+    });
+    const lects = p.lecturas || [];
+    if (lects.length) {
+      const bloque = elem('div', 'staff-lecturas'); bloque.append(elem('h4', '', 'Lecturas de INR (recetas anteriores)'));
+      const vistos = new Set();
+      lects.forEach(l => {
+        const clave = `${String(l.fecha).slice(0, 10)}|${l.valor}`; const dup = vistos.has(clave); vistos.add(clave);
+        const f = elem('div', dup ? 'staff-lectura es-dup' : 'staff-lectura');
+        const info = elem('span', '', `${fechaHoraCorta(l.fecha).split(',')[0]} · INR ${l.valor} (rango ${l.min} a ${l.max})`);
+        if (dup) info.append(elem('span', 'staff-dup', 'REPETIDA'));
+        const b = elem('button', 'peligro', 'Eliminar'); b.type = 'button'; b.dataset.staffEliminarInr = l.id; b.dataset.nombre = `INR ${l.valor} del ${fechaHoraCorta(l.fecha).split(',')[0]}`;
+        f.append(info, b); bloque.append(f);
+      });
+      card.append(bloque);
+    }
+    cont.append(card);
+  });
+}
+$('staffBuscar')?.addEventListener('input', pintarStaff);
+$('btnStaffActualizar')?.addEventListener('click', async () => { await cargarStaff(); if (staffRol === 'admin') await cargarRolesStaff(); });
+$('staffLista')?.addEventListener('click', async e => {
+  const bh = staffRol === 'admin' ? e.target.closest('[data-staff-hora]') : null, be = e.target.closest('[data-staff-eliminar]'), bi = e.target.closest('[data-staff-eliminar-inr]');
+  try {
+    if (bi) {
+      if (!confirm(`¿Eliminar la lectura ${bi.dataset.nombre}? No se puede deshacer.`)) return;
+      await fetchAPI(`/registros-inr/${bi.dataset.staffEliminarInr}/`, { method: 'DELETE' });
+      await cargarStaff();
+    } else if (bh) {
+      const nueva = prompt('Nueva hora de toma (formato HH:MM, por ejemplo 17:00):', bh.dataset.actual);
+      if (!nueva) return;
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(nueva.trim())) { alert('Formato inválido. Usa HH:MM, por ejemplo 17:00.'); return; }
+      await fetchAPI(`/medicamentos/${bh.dataset.staffHora}/`, { method: 'PATCH', body: JSON.stringify({ horaProgramada: nueva.trim() }) });
+      await cargarStaff();
+    } else if (be) {
+      if (!confirm(`¿Eliminar "${be.dataset.nombre}" de este paciente? No se puede deshacer.`)) return;
+      await fetchAPI(`/medicamentos/${be.dataset.staffEliminar}/`, { method: 'DELETE' });
+      await cargarStaff();
+    }
+  } catch (err) { alert(err.message || 'No se pudo completar la acción.'); }
+});
+async function cargarRolesStaff() {
+  const cont = $('staffRoles'); if (!cont) return;
+  try {
+    const r = await fetchAPI('/staff/usuarios/');
+    cont.replaceChildren();
+    (r.data || []).forEach(u => {
+      const fila = elem('div', 'staff-rol-fila');
+      const info = elem('div'); info.append(elem('strong', '', u.nombre), elem('div', 'muted', u.email || ''));
+      fila.append(info);
+      if (u.rol === 'admin') { fila.append(elem('span', 'muted', 'Super usuario')); }
+      else {
+        const sel = document.createElement('select'); sel.setAttribute('aria-label', `Rol de ${u.nombre}`);
+        [['paciente', 'Paciente'], ['medico', 'Enfermero/a']].forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; if (u.rol === v) o.selected = true; sel.append(o); });
+        const b = elem('button', '', 'Guardar'); b.type = 'button';
+        b.addEventListener('click', async () => {
+          try { await fetchAPI(`/staff/usuarios/${u.id}/rol/`, { method: 'POST', body: JSON.stringify({ rol: sel.value }) }); b.textContent = '✓ Guardado'; await cargarStaff(); }
+          catch (err) { alert(err.message || 'No se pudo cambiar el rol.'); }
+        });
+        const caja = elem('div'); caja.append(sel, document.createTextNode(' '), b); fila.append(caja);
+      }
+      cont.append(fila);
+    });
+  } catch (e) { cont.textContent = e.message || 'No se pudo cargar la lista de usuarios.'; }
+}
 
 function pedirPermisoNotificaciones() {
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
