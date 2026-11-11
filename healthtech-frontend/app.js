@@ -1248,7 +1248,7 @@ async function iniciarStaff(rol) {
   if ($('staffSubtitulo')) $('staffSubtitulo').textContent = admin ? 'Puedes ver y modificar todo, y asignar roles.' : 'Ves las pastillas y horarios de cada paciente y puedes eliminar recetas repetidas o antiguas.';
   $('staffAdmin')?.classList.toggle('hidden', !admin);
   const vs = $('vistaStaff'); if (vs) { vs.classList.toggle('es-admin', admin); vs.classList.toggle('es-enfermero', !admin); }
-  if ($('staffBanner')) $('staffBanner').textContent = admin ? '👑 PERFIL SUPER USUARIO · ADMINISTRADOR (puede modificar todo)' : '🩺 PERFIL ENFERMERO/A · VE TRATAMIENTOS Y ELIMINA DUPLICADOS (no edita)';
+  if ($('staffBanner')) $('staffBanner').textContent = admin ? 'PERFIL SUPER USUARIO · ADMINISTRADOR (puede modificar todo)' : 'PERFIL ENFERMERO/A · VE TRATAMIENTOS Y ELIMINA DUPLICADOS (no edita)';
   const link = $('linkAdminDjango'); if (link) link.href = `${String(API_BASE_URL).trim().replace(/\/+$/, '')}/admin/`;
   await cargarStaff();
   if (admin) await cargarRolesStaff();
@@ -1285,7 +1285,7 @@ function pintarStaff() {
       const dosis = dosisDeHoy(m.horarioSemanal);
       const corresponde = dosis && dosis !== '0';
       const izq = elem('div'); const tit = elem('strong', '', `${m.nombre} ${m.unidad || ''}`.trim()); izq.append(tit); if (dupMed.has(m.id)) izq.append(elem('span', 'staff-dup', 'POSIBLE DUPLICADO')); izq.append( elem('div', 'muted', corresponde ? `Dosis de hoy: ${dosis}` : 'Hoy no le corresponde'));
-      const der = elem('div'); der.append(elem('span', 'staff-hora', `🕒 ${m.hora || '—'}`), document.createTextNode('  '));
+      const der = elem('div'); der.append(elem('span', 'staff-hora', `${m.hora || '—'}`), document.createTextNode('  '));
       if (corresponde) der.append(elem('span', m.tomadaHoy ? 'staff-ok' : 'staff-pend', m.tomadaHoy ? '✓ Tomado hoy' : 'Pendiente hoy'));
       linea.append(izq, der); fila.append(linea);
       if (m.tomas && m.tomas.length) {
