@@ -185,6 +185,7 @@ REST_FRAMEWORK = {
         'registro': os.environ.get('THROTTLE_REGISTRO', '10/hour'),
         'refresh': os.environ.get('THROTTLE_REFRESH', '30/min'),
         'ia': os.environ.get('THROTTLE_IA', '10/hour'),
+        'correo': os.environ.get('THROTTLE_CORREO', '5/hour'),
     },
     # Cuántos proxies hay delante (Render = 1). Con 0 se usa la IP directa y
     # no se puede falsear X-Forwarded-For para esquivar el rate limiting.
