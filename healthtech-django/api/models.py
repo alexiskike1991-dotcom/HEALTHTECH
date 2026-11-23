@@ -108,3 +108,22 @@ class EnlaceCuidador(models.Model):
 
     def __str__(self):
         return f'Enlace cuidador de {self.usuario.username}'
+
+
+class Receta(models.Model):
+    """Biblioteca de recetas: foto de la hoja (ya normalizada) + los datos que leyó la IA, como respaldo del paciente."""
+
+    usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='recetas')
+    imagen = models.BinaryField()
+    datos = models.JSONField(default=dict, blank=True)
+    creada = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ['-creada', '-id']
+
+    def __str__(self):
+        return f'Receta {self.id} - {self.usuario.username}'
+
+    @property
+    def propietario(self):
+        return self.usuario

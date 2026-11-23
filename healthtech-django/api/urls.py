@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import SimpleRouter
 
-from . import cuidador, staff, views
+from . import correo, cuidador, recetas, staff, views
 
 router = SimpleRouter()
 router.register('medicamentos', views.MedicamentoViewSet, basename='medicamento')
@@ -22,5 +22,9 @@ urlpatterns = [
     path('staff/pacientes/', staff.StaffPacientesView.as_view(), name='staff-pacientes'),
     path('staff/usuarios/', staff.UsuariosView.as_view(), name='staff-usuarios'),
     path('staff/usuarios/<int:pk>/rol/', staff.CambiarRolView.as_view(), name='staff-rol'),
+    path('control/enviar-correo/', correo.EnviarControlView.as_view(), name='control-enviar-correo'),
+    path('recetas/', recetas.RecetasView.as_view(), name='recetas'),
+    path('recetas/<int:pk>/', recetas.RecetaDetalleView.as_view(), name='receta-detalle'),
+    path('recetas/<int:pk>/imagen/', recetas.RecetaImagenView.as_view(), name='receta-imagen'),
     path('recetas/analizar/', views.AnalizarRecetaView.as_view(), name='recetas-analizar'),
 ] + router.urls
