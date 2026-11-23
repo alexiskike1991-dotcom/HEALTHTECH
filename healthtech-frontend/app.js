@@ -23,7 +23,11 @@ const formRegistro = $('formRegistro');
 const DIAS_SEMANA = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
 
 // ---------------------------------------------------------------- Conexión con la API (Django)
+// Si existe el modo sin internet (offline.js), este pasa por el: guarda lo ultimo visto y lo muestra si se cae la conexion.
 async function fetchAPI(path, options = {}, _reintentando) {
+  return window.__fetchAPIHook ? window.__fetchAPIHook(fetchAPIBase, path, options, _reintentando) : fetchAPIBase(path, options, _reintentando);
+}
+async function fetchAPIBase(path, options = {}, _reintentando) {
   const headers = Object.assign({}, options.headers || {});
   if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
   if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) {
@@ -958,6 +962,7 @@ $('formReceta')?.addEventListener('submit', async e => {
     if (!confirmado) {
       if (mensaje) mensaje.textContent = 'Escaneo cancelado. No se guardó ningún dato.';
       if ($('inputImagen')) $('inputImagen').value = '';
+      document.dispatchEvent(new CustomEvent('receta-procesada', { detail: { estado: 'cancelado' } }));
       return;
     }
 
@@ -1016,13 +1021,19 @@ $('formReceta')?.addEventListener('submit', async e => {
     }
 
     if (mensaje) mensaje.textContent = 'Listo. Revisa abajo en "Mis medicamentos" y confirma el tratamiento.';
+    document.dispatchEvent(new CustomEvent('receta-procesada', { detail: { estado: 'ok' } }));
     if ($('inputImagen')) $('inputImagen').value = '';
     await cargarHistorial();
     await cargarMedicamentos();
     $('herramientaMedicamentos')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (error) {
     console.error('Error analizando receta:', error);
-    if (mensaje) mensaje.textContent = error.message || 'No se pudo conectar con el servidor. Revisa que esté encendido.';
+    if (/No se pudo conectar/i.test(error.message || '') && window.encolarReceta) {
+      await window.encolarReceta(archivo);
+      if ($('inputImagen')) $('inputImagen').value = '';
+      if (mensaje) mensaje.textContent = 'Sin internet: guardé la foto de tu receta. Se leerá sola cuando vuelva la conexión.';
+    } else if (mensaje) mensaje.textContent = error.message || 'No se pudo conectar con el servidor. Revisa que esté encendido.';
+    document.dispatchEvent(new CustomEvent('receta-procesada', { detail: { estado: 'error' } }));
   } finally {
     if (boton) { boton.disabled = false; boton.textContent = textoBoton; }
   }
