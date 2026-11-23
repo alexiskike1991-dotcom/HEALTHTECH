@@ -962,6 +962,7 @@ $('formReceta')?.addEventListener('submit', async e => {
     }
 
     if (mensaje) mensaje.textContent = 'Guardando...';
+    if (window.guardarRecetaBiblioteca) await window.guardarRecetaBiblioteca(archivo, confirmado);
 
     if (confirmado.medico) localStorage.setItem('taco_medico', confirmado.medico);
     if (confirmado.ultimoControl) localStorage.setItem('taco_ultimo_control', confirmado.ultimoControl);
@@ -1153,6 +1154,18 @@ async function cargarHistorial() {
   }
 }
 $('btnActualizarHistorial')?.addEventListener('click', cargarHistorial);
+$('btnEnviarCorreo')?.addEventListener('click', async () => {
+  const boton = $('btnEnviarCorreo'), msg = $('mensajeCorreo');
+  if (!accessToken || !boton) return;
+  boton.disabled = true; msg.textContent = 'Enviando...';
+  try {
+    const r = await fetchAPI('/control/enviar-correo/', { method: 'POST' });
+    msg.textContent = r.data?.mensaje || 'Listo. Revisa tu correo.';
+  } catch (error) {
+    msg.textContent = error.message || 'No se pudo enviar el correo.';
+  }
+  boton.disabled = false;
+});
 
 // ---------------------------------------------------------------- QR permanente para el cuidador (solo lectura)
 function urlCuidador(token) {
